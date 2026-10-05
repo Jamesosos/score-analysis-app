@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>整合測試 — 成績查詢系統</title>
+<style>
+  body { font-family: Consolas, monospace; font-size: 13px; padding: 16px; background: #111; color: #ddd; }
+  h1 { font-size: 16px; color: #7dd3fc; }
+  h2 { font-size: 14px; margin-top: 18px; color: #a5b4fc; border-bottom: 1px solid #333; padding-bottom: 4px; }
+  .ok { color: #4ade80; }
+  .fail { color: #f87171; font-weight: bold; }
+  .warn { color: #fbbf24; }
+  pre { background: #1a1a1a; padding: 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0; }
+  table { border-collapse: collapse; margin: 6px 0; }
+  td, th { border: 1px solid #333; padding: 2px 6px; text-align: left; }
+  #summary { font-size: 15px; padding: 10px; border-radius: 8px; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<!--
+  閘門圖片：伺服器延遲 55 秒才回應，用來拖住 load 事件，
+  讓下面的非同步工作（抓取 54 個 xlsx、解析）有「真實時間」可以跑完。
+  測試結束時會換成 1x1 data URI，load 立刻放行，不必真的等 55 秒。
+
+  為什麼不用 --virtual-time-budget：虛擬時間會讓計時器瞬間完成，但真實網路 I/O 與
+  IndexedDB 回呼不受虛擬時間控制，會導致測試還沒跑完就被截取（或永遠不完成）。
+-->
+<img id="gate" src="/slow?ms=55000" alt="" width="1" height="1" style="position:absolute;opacity:0">
+
+<h1>整合測試：零依賴 XLSX 解析器 + 成績表語意解析</h1>
+<div id="summary">執行中…</div>
+<div id="out"></div>
+
+<script type="module">
+import { readTableFile, readXlsx, parseCsv } from '../js/xlsx.js';
+import { parseWorkbook, parseScore, gradeOf, metaFromPath, parseSheet } from '../js/parse.js';
+import { buildDataset } from '../js/loader.js';
+import { summarize, tierOf, fmt } from '../js/stats.js';
+
+const out = document.getElementById('out');
+const results = [];
+let pass = 0, fail = 0;
+
+function log(html) { out.insertAdjacentHTML('beforeend', html); }
+function check(name, cond, detail = '') {
+  results.push({ name, cond: !!cond, detail });
+  if (cond) pass++; else fail++;
+  log(`<div class="${cond ? 'ok' : 'fail'}">${cond ? '✔' : '✘'} ${name}${detail ? ` — ${detail}` : ''}</div>`);
+}
+function h2(t) { log(`<h2>${t}</h2>`); }
+function pre(v) { log(`<pre>${typeof v === 'string' ? v : JSON.stringify(v, null, 1)}</pre>`); }
+
+/* ---------------------------------------------------- 單元測試：parseScore --- */
+h2('1. parseScore 分數解析');
+const scoreCases = [
+  [85, 85], ['85', 85], [' 92.5 ', 92.5], [0, 0], ['0', 0],
+  ['缺考', null], ['缺席', null], ['', null], [null, null], ['--', null], ['X', null],
+  ['85分', 85], ['60(補考)', 60], ['A', null], ['B+', null],
+  ['2024-01-15', null],   // 日期不應該被讀成分數
+  ['20230101', 20230101], // 純數字（如學號）仍然是數字
+];
+let scoreOk = 0;
+for (const [input, expected] of scoreCases) {
+  const got = parseScore(input);
+  const ok = got === expected;
+  if (ok) scoreOk++;
+  else log(`<div class="fail">  ✘ parseScore(${JSON.stringify(input)}) = ${JSON.stringify(got)}，預期 ${JSON.stringify(expected)}</div>`);
+}
+check(`parseScore 全部 ${scoreCases.length} 個案例`, scoreOk === scoreCases.length, `${scoreOk}/${scoreCases.length}`);
+
+/* ---------------------------------------------------- 單元測試：路徑解析 --- */
+h2('2. 資料夾路徑 → 學年／學段／班級／年級');
+const pathCases = [
+  ['113學年/上學期/高一A班.xlsx', { year: '113學年', term: '上學期', className: '高一A班', grade: '高一' }],
+  ['114學年\\下學期\\高二B班.xlsx', { year: '114學年', term: '下學期', className: '高二B班', grade: '高二' }],
+  ['113學年/上學期/班級_高一A班.xlsx', { className: '高一A班' }],
+  ['112學年/上學期/初三C班.xlsx', { grade: '初三' }],
+  ['113學年/上學期/S4A.xlsx', { grade: 'S4' }],
+];
+for (const [input, expect] of pathCases) {
+  const m = metaFromPath(input);
+  const ok = Object.entries(expect).every(([k, v]) => m[k] === v);
+  check(`metaFromPath("${input}")`, ok, ok ? '' : `得到 ${JSON.stringify(m)}`);
+}
+
+/* ---------------------------------------------------- 單元測試：CSV --- */
+h2('3. CSV 解析');
+const csv = '學號,姓名,中文科\n1,"陳,嘉欣",88\n2,黃志明,缺考\n';
+const csvRows = parseCsv(csv);
+check('CSV 欄位數正確', csvRows[0].length === 3, JSON.stringify(csvRows[0]));
+check('CSV 雙引號內的逗號不被切開', csvRows[1][1] === '陳,嘉欣', JSON.stringify(csvRows[1]));
+check('CSV 數字轉型', csvRows[1][0] === 1 && csvRows[1][2] === 88, JSON.stringify(csvRows[1]));
+
+/* ---------------------------------------------------- 標題列偵測（合成資料） --- */
+h2('4. 標題列自動偵測（模擬上面有合併大標題）');
+const synthetic = [
+  ['113學年 上學期 高一A班 成績表', '', '', '', ''],
+  ['113學年 上學期 高一A班 成績表', '', '', '', ''],
+  ['學號', '姓名', '中文科', '數學科', '總分'],
+  [20230001, '陳嘉欣', 88, 76, 164],
+  [20230002, '黃志明', 55, 92, 147],
+  [20230003, '李婉婷', '缺考', 40, 40],
+  ['平均', '', 71.5, 69.3, 117],
+];
+const sp = parseSheet(synthetic);
+check('找到正確的標題列（第 3 列）', sp.headerRow === 2, `headerRow=${sp.headerRow}`);
+check('科目欄辨識正確', JSON.stringify(sp.subjects) === JSON.stringify(['中文科', '數學科']), JSON.stringify(sp.subjects));
+check('總分被歸類為 derived 而非科目', sp.columns.find(c => c.header === '總分')?.role === 'derived');
+check('只抓到 3 位學生（摘要列被排除）', sp.students.length === 3, `得到 ${sp.students.length}`);
+check('缺考解析為 null', sp.students[2].scores['中文科'] === null);
+check('0 分不會被當成缺考', (() => {
+  const t = parseSheet([['學號', '姓名', '數學科'], [1, 'a', 0]]);
+  return t.students[0].scores['數學科'] === 0;
+})());
+
+/* ---------------------------------------------------- 真實 xlsx 檔（如果有的話） --- */
+h2('5. 真實 .xlsx 檔解析（讀取 demo-data）');
+
+async function fetchAsFile(url, name) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const blob = await r.blob();
+  return new File([blob], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+/**
+ * 動態取得示範檔清單。
+ * 優先讀 demo-data/manifest.json；讀不到才退回「掃描常見檔名」。
+ * 這樣示範資料的版面配置改變時，測試不會因為路徑寫死而全部失敗。
+ */
+async function discoverDemoFiles() {
+  try {
+    const r = await fetch('../demo-data/manifest.json', { cache: 'no-store' });
+    if (r.ok) {
+      const j = await r.json();
+      const list = Array.isArray(j) ? j : (j.files || []);
+      if (list.length) return { files: list, source: 'manifest.json' };
+    }
+  } catch { /* 沒有 manifest，走後備方案 */ }
+
+  const guesses = [];
+  for (const y of ['112學年', '113學年', '114學年']) {
+    for (const t of ['上學期', '下學期']) {
+      for (const g of ['高一', '高二', '高三']) {
+        for (const a of ['A', 'B', 'C']) guesses.push(`${y}/${t}/${g}${a}班.xlsx`);
+      }
+    }
+  }
+  return { files: guesses, source: '檔名推測（找不到 manifest.json）' };
+}
+
+const discovered = await discoverDemoFiles();
+log(`<div>示範檔清單來源：<b>${discovered.source}</b>，共 ${discovered.files.length} 個路徑</div>`);
+
+// 控制測試時間：取第一個學期的全部檔案，其他每個學期各取 1 個
+const byTerm = new Map();
+for (const p of discovered.files) {
+  const key = p.split('/').slice(0, 2).join('/');
+  if (!byTerm.has(key)) byTerm.set(key, []);
+  byTerm.get(key).push(p);
+}
+const termKeys = [...byTerm.keys()].sort();
+const subset = termKeys.length
+  ? [...byTerm.get(termKeys[0]), ...termKeys.slice(1).map((k) => byTerm.get(k)[0])]
+  : [];
+log(`<div>實際測試 ${subset.length} 個檔案：${subset.map((p) => p.split('/').pop()).join('、')}</div>`);
+
+let loaded = [];
+let fetchFails = 0;
+for (const rel of subset) {
+  try {
+    const file = await fetchAsFile(`../demo-data/${encodeURI(rel)}`, rel.split('/').pop());
+    const wb = await readTableFile(file);
+    check(`readXlsx 開啟「${rel}」`, wb.sheets.length > 0, `工作表：${wb.sheets.map(s => s.name).join(', ')}`);
+
+    const parsed = parseWorkbook(wb, rel);
+    loaded.push({ rel, file, parsed });
+
+    log(`<div>　<b>${rel}</b>：${parsed.students.length} 位學生、${parsed.subjects.length} 科`
+      + `　學年=${parsed.meta.year} 學段=${parsed.meta.term} 班級=${parsed.meta.className} 年級=${parsed.meta.grade}</div>`);
+    if (parsed.warnings?.length) log(`<div class="warn">　提醒：${parsed.warnings.join('；')}</div>`);
+
+    check(`「${rel}」抓到學生`, parsed.students.length > 0, `${parsed.students.length} 人`);
+    check(`「${rel}」抓到科目`, parsed.subjects.length >= 5, `${parsed.subjects.length} 科`);
+    check(`「${rel}」學年／學段／班級從路徑正確推得`,
+      !!parsed.meta.year && !!parsed.meta.term && !!parsed.meta.className && !!parsed.meta.grade,
+      `${parsed.meta.year} / ${parsed.meta.term} / ${parsed.meta.className} / ${parsed.meta.grade}`);
+  } catch (err) {
+    fetchFails++;
+    check(`讀取「${rel}」`, false, err.message);
+  }
+}
+check('示範檔全部可讀取（manifest 與實際檔案一致）', fetchFails === 0, `失敗 ${fetchFails} 個`);
+
+// 標題列位置：示範資料刻意有幾個檔案第 1 列是合併大標題，必須被正確跳過
+const headerRows = loaded.map((l) => l.parsed.headerRow);
+const skippedTitle = loaded.filter((l) => l.parsed.headerRow > 0).length;
+log(`<div>標題列位置分佈：${JSON.stringify(headerRows.reduce((a, h) => (a[h] = (a[h] || 0) + 1, a), {}))}</div>`);
+check('至少有一個檔案的第 1 列是合併大標題且被正確跳過', skippedTitle > 0,
+  `${skippedTitle} / ${loaded.length} 個檔案標題列不在第 1 列`);
+
+if (loaded.length > 0) {
+  const first = loaded[0].parsed;
+  h2('6. 第一個檔案的解析細節');
+  log(`<div>欄位角色：</div>`);
+  log('<table><tr><th>欄位</th><th>角色</th><th>數值比例</th></tr>'
+    + first.columns.map(c => `<tr><td>${c.header}</td><td>${c.role}</td><td>${(c.numericRatio * 100).toFixed(0)}%</td></tr>`).join('')
+    + '</table>');
+
+  log(`<div>前 3 位學生：</div>`);
+  pre(first.students.slice(0, 3).map(s => ({
+    id: s.id, name: s.name, scores: s.scores, 操行: s.info?.操行,
+    操行調整: s.info?.操行調整, sum: s.sum, avg: s.avg, fileTotal: s.fileTotal, fileRank: s.fileRank,
+  })));
+
+  const mismatches = loaded.flatMap(l => l.parsed.students).filter(s => s.totalMismatch);
+  check('總分與各科加總一致（無 mismatch）', mismatches.length === 0, `${mismatches.length} 筆不一致`);
+
+  const conduct = first.students.filter(s => s.info && typeof s.info.操行 === 'string').length;
+  check('文字操行欄位被正確保留', conduct > 0, `${conduct} 位有操行等級`);
+
+  const nulls = loaded.flatMap(l => l.parsed.students)
+    .flatMap(s => Object.values(s.scores)).filter(v => v === null).length;
+  check('缺考／空白儲存格解析為 null', nulls > 0, `共 ${nulls} 筆`);
+
+  /* ---- 完整資料集 ---- */
+  h2('7. 完整資料集建構（buildDataset）');
+  const allFiles = loaded.map(l => ({ file: l.file, path: l.rel }));
+  try {
+    const ds = await buildDataset(allFiles, { sourceName: '測試' });
+    log(`<div>學年：${ds.years.join('、')}</div>`);
+    log(`<div>學段：${ds.terms.join('、')}</div>`);
+    log(`<div>年級：${ds.grades.join('、')}</div>`);
+    log(`<div>班級：${ds.classes.join('、')}</div>`);
+    log(`<div>科目：${ds.subjects.join('、')}</div>`);
+    log(`<div>學生總數：${ds.students.length}　檔案數：${ds.files.length}</div>`);
+
+    check('資料集有學生', ds.students.length > 0, `${ds.students.length} 人`);
+    const expectedYears = new Set(loaded.map((l) => l.parsed.meta.year));
+    check('學年正確聚合', ds.years.length === expectedYears.size,
+      `${ds.years.length} 個：${ds.years.join(',')}`);
+    const expectedClasses = new Set(loaded.map((l) => l.parsed.meta.className));
+    check('班級正確聚合', ds.classes.length === expectedClasses.size,
+      `${ds.classes.length} 個：${ds.classes.join(',')}`);
+    check('每個學生都有 rankInClass', ds.students.every(s => s.rankInClass !== null || s.sum === null));
+    check('columns 有被收集', Array.isArray(ds.columns) && ds.columns.length > 0, `${ds.columns?.length} 欄`);
+
+    // 模擬「高一 中文科 全年級比較」
+    const gaoyi = ds.students.filter(s => s.grade === '高一' && s.year === '112學年' && s.term === '上學期');
+    const chinese = gaoyi.map(s => s.scores['中文科']).filter(v => v !== null && v !== undefined);
+    const st = summarize(chinese, 60);
+    log(`<div>模擬情境：112學年上學期 高一 中文科 → ${chinese.length} 人有分數，平均 ${fmt(st.mean)}，及格率 ${(st.passRate * 100).toFixed(1)}%</div>`);
+    check('全年級單科比較可計算', chinese.length > 0 && st.mean !== null);
+    check('門檻上色可運作', tierOf(45, [{ min: 0, max: 59.99, fg: '#c62828' }])?.fg === '#c62828');
+  } catch (err) {
+    check('buildDataset', false, err.message + '\n' + err.stack);
+  }
+} else {
+  check('demo-data 存在', false, '找不到任何 demo .xlsx 檔，請先產生示範資料');
+}
+
+/* ---------------------------------------------------- 總結 --- */
+const total = pass + fail;
+const box = document.getElementById('summary');
+box.className = fail === 0 ? 'ok' : 'fail';
+box.textContent = fail === 0
+  ? `全部通過：${pass} / ${total}`
+  : `有失敗：通過 ${pass} / ${total}，失敗 ${fail}`;
+document.title = fail === 0 ? `PASS ${pass}/${total}` : `FAIL ${pass}/${total}`;
+
+if (fail > 0) {
+  log('<h2>失敗清單</h2>');
+  log('<pre class="fail">' + results.filter(r => !r.cond).map(r => `${r.name}${r.detail ? ' — ' + r.detail : ''}`).join('\n') + '</pre>');
+}
+window.__TEST_DONE__ = { pass, fail, total };
+
+// 結果都寫進 DOM 了，放行 load 事件讓 headless 立刻截取
+const gate = document.getElementById('gate');
+if (gate) {
+  gate.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+}
+</script>
+</body>
+</html>

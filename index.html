@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<title>學生成績查詢系統</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+
+<!--
+  錯誤攔截：刻意寫成「非 module」的一般 script，並且放在 app.js 之前。
+  原因：如果 app.js 本身有語法錯誤，整個模組都不會執行，模組內部的錯誤處理
+  也就不會生效，使用者只會看到一片空白而不知道發生什麼事。
+  這段程式在 app.js 之前就註冊好攔截器，任何錯誤都會顯示在畫面上。
+-->
+<script>
+(function () {
+  var errors = [];
+  window.__APP_ERRORS__ = errors;
+
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function render() {
+    if (!errors.length || !document.body) return;
+    var el = document.getElementById('fatalError');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'fatalError';
+      el.className = 'fatal-error';
+      document.body.insertBefore(el, document.body.firstChild);
+    }
+    el.innerHTML = '<b>程式發生錯誤，畫面可能不完整</b>'
+      + errors.map(function (e) {
+          var where = e.source
+            ? '<pre>' + esc(String(e.source).split('/').pop()) + '　第 ' + esc(e.line) + ' 行</pre>'
+            : '';
+          return '<div class="fe-msg">' + esc(e.message) + '</div>' + where;
+        }).join('')
+      + '<div class="fe-hint">請按 F12 開啟主控台查看完整訊息，或把這段錯誤內容告訴我。</div>';
+  }
+
+  function push(e) {
+    errors.push(e);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', render);
+    } else {
+      render();
+    }
+  }
+
+  window.addEventListener('error', function (e) {
+    push({ message: e.message || String(e.error), source: e.filename, line: e.lineno });
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    push({ message: (r && r.message) ? r.message : String(r), source: '', line: '' });
+  });
+})();
+</script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============================ 頂部列 ============================ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M4 20V11M10 20V5M16 20v-6M22 20H2"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>學生成績查詢系統</h1>
+        <p id="dataStatus">尚未載入資料</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnLoadFolder" class="btn primary" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        載入成績資料夾
+      </button>
+      <button id="btnLoadDemo" class="btn" type="button">示範資料</button>
+      <button id="btnReload" class="btn ghost" type="button" title="重新選擇資料夾以更新資料">重新載入…</button>
+    </div>
+  </header>
+
+  <!-- ============================ 分頁 ============================ -->
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-view="scores" role="tab" type="button">成績總表</button>
+    <button class="tab" data-view="compare" role="tab" type="button">單科比較</button>
+    <button class="tab" data-view="data" role="tab" type="button">資料來源 <span class="badge" id="tabWarnBadge" hidden></span></button>
+    <button class="tab" data-view="settings" role="tab" type="button">門檻設定</button>
+  </nav>
+
+  <!-- ============================ 篩選列 ============================ -->
+  <section class="filters" id="filters">
+    <div class="filter-row">
+      <label class="field">
+        <span>學年</span>
+        <select id="selYear"></select>
+      </label>
+      <label class="field">
+        <span>學段</span>
+        <select id="selTerm"></select>
+      </label>
+      <label class="field">
+        <span>年級</span>
+        <select id="selGrade"></select>
+      </label>
+      <label class="field">
+        <span>搜尋</span>
+        <input id="searchBox" type="search" placeholder="學號或姓名…" autocomplete="off">
+      </label>
+      <div class="field grow">
+        <span>班級 <em class="hint" id="classHint"></em>
+          <button class="link-btn" id="btnAllClasses" type="button">全選</button>
+          <button class="link-btn" id="btnClearClasses" type="button">清除</button>
+        </span>
+        <div class="chips" id="classChips"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 內容 ============================ -->
+  <main id="main">
+
+    <!-- ---------------------------- 成績總表 ---------------------------- -->
+    <section class="view active" id="view-scores">
+      <div class="toolbar">
+        <div class="stat-chips" id="scoresSummary"></div>
+        <div class="toolbar-actions">
+          <label class="toggle" title="用各科加總取代 Excel 裡的總分與名次">
+            <input type="checkbox" id="chkRecompute">
+            <span>重算總分名次</span>
+          </label>
+          <label class="toggle" title="整列上色，方便一眼掃出不及格學生">
+            <input type="checkbox" id="chkColorRow">
+            <span>整列上色</span>
+          </label>
+          <button class="btn small" id="btnExportCsv" type="button">匯出 CSV</button>
+          <button class="btn small" id="btnPrint" type="button">列印</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="scoresTable" class="grade-table"></table>
+      </div>
+      <p class="note" id="scoresNote"></p>
+    </section>
+
+    <!-- ---------------------------- 單科比較 ---------------------------- -->
+    <section class="view" id="view-compare">
+      <div class="compare-controls">
+        <label class="field">
+          <span>比較科目</span>
+          <select id="selSubject"></select>
+        </label>
+        <label class="field">
+          <span>名單排序</span>
+          <select id="selSortMode">
+            <option value="score">分數由高到低</option>
+            <option value="class">依班級、再依分數</option>
+            <option value="id">依學號</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>顯示範圍</span>
+          <select id="selScope">
+            <option value="selected">只顯示已勾選班級</option>
+            <option value="grade">本學年本學段全部班級（全年級）</option>
+          </select>
+        </label>
+        <div class="field">
+          <span>&nbsp;</span>
+          <button class="btn small" id="btnExportCompare" type="button">匯出這份名單</button>
+        </div>
+      </div>
+
+      <div id="compareStats"></div>
+      <div id="compareChart"></div>
+
+      <h2 class="section-title">全年級單科排名 <em id="compareCount"></em></h2>
+      <div class="table-wrap tall">
+        <table id="compareTable" class="grade-table"></table>
+      </div>
+
+      <h2 class="section-title">各班各科平均對照</h2>
+      <p class="note">用來快速看出「哪一班哪一科特別弱」。數字越低顏色越紅。</p>
+      <div class="table-wrap">
+        <table id="matrixTable" class="grade-table matrix"></table>
+      </div>
+    </section>
+
+    <!-- ---------------------------- 資料來源 ---------------------------- -->
+    <section class="view" id="view-data">
+      <div class="toolbar">
+        <div class="stat-chips" id="dataSummary"></div>
+        <div class="toolbar-actions">
+          <button class="btn small" id="btnClearData" type="button">清除已載入的資料</button>
+        </div>
+      </div>
+
+      <h2 class="section-title">解析問題與提醒 <em id="warnCount"></em></h2>
+      <div id="warningList"></div>
+
+      <h2 class="section-title">已載入的檔案 <em id="fileCount"></em></h2>
+      <div class="table-wrap tall">
+        <table class="grade-table" id="fileTable"></table>
+      </div>
+    </section>
+
+    <!-- ---------------------------- 門檻設定 ---------------------------- -->
+    <section class="view" id="view-settings">
+      <div class="settings-grid">
+
+        <div class="card">
+          <h2>及格線</h2>
+          <p class="note">用來計算及格率，以及判斷「不及格」這一層的起點。</p>
+          <label class="field inline">
+            <span>及格分數</span>
+            <input type="number" id="inpPassLine" min="0" max="100" step="1">
+          </label>
+        </div>
+
+        <div class="card">
+          <h2>分數顏色門檻</h2>
+          <p class="note">依分數區間上色。每一層包含下界（含）、上界（含）與顏色。</p>
+          <div id="tierEditor"></div>
+          <div class="card-actions">
+            <button class="btn small" id="btnAddTier" type="button">新增一層</button>
+            <button class="btn small ghost" id="btnResetTiers" type="button">回復預設</button>
+            <button class="btn small ghost" id="btnPresetFive" type="button">五色分層</button>
+          </div>
+          <div class="tier-preview" id="tierPreview"></div>
+        </div>
+
+        <div class="card">
+          <h2>科目欄位</h2>
+          <p class="note">程式自動判斷哪些欄位是科目。如果有判斷錯的，可以在這裡手動調整。</p>
+          <div id="subjectManager"></div>
+        </div>
+
+        <div class="card">
+          <h2>資料管理</h2>
+          <dl class="kv" id="storageInfo"></dl>
+          <div class="card-actions">
+            <button class="btn small" id="btnClearData2" type="button">清除已載入的資料</button>
+            <button class="btn small ghost" id="btnResetAll" type="button">回復所有預設設定</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================ 空狀態 ============================ -->
+  <div class="empty-state" id="emptyState">
+    <div class="empty-card">
+      <div class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8M8 16h5"/></svg>
+      </div>
+      <h2>先載入成績資料</h2>
+      <p>選擇你的<b>學年資料夾</b>（裡面放著各學段、各班級的 Excel 檔），程式會自動分類。</p>
+      <pre class="tree">113學年\
+├── 上學期\
+│   ├── 高一A班.xlsx
+│   └── 高一B班.xlsx
+└── 下學期\
+    └── 高一A班.xlsx</pre>
+      <div class="empty-actions">
+        <button class="btn primary" id="btnEmptyLoad" type="button">選擇學年資料夾</button>
+        <button class="btn" id="btnEmptyDemo" type="button">先看示範資料</button>
+      </div>
+      <p class="note small-print">資料只會在你的瀏覽器裡解析，不會上傳到任何伺服器。</p>
+    </div>
+  </div>
+
+  <!-- ============================ 載入進度 ============================ -->
+  <div class="loading" id="loading" hidden>
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p id="loadingText">正在讀取成績資料…</p>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <p class="note" id="loadingSub"></p>
+      <button class="btn small ghost" id="btnCancelLoad" type="button">取消</button>
+    </div>
+  </div>
+
+</div>
+
+<input type="file" id="folderInput" webkitdirectory directory multiple hidden>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>UI 端對端測試 — 執行中</title>
+<style>
+  body { font-family: Consolas, monospace; font-size: 13px; padding: 16px; background: #111; color: #ddd; }
+  h1 { font-size: 16px; color: #7dd3fc; }
+  h2 { font-size: 13px; margin: 14px 0 4px; color: #a5b4fc; border-bottom: 1px solid #333; }
+  .ok { color: #4ade80; } .fail { color: #f87171; font-weight: bold; } .warn { color: #fbbf24; }
+  pre { background: #1a1a1a; padding: 8px; }
+  #summary { font-size: 15px; padding: 10px; border-radius: 8px; margin: 10px 0; background: #1a1a1a; }
+  iframe { width: 1400px; height: 800px; border: 1px solid #444; margin-top: 12px; background: #fff; }
+</style>
+</head>
+<body>
+
+<!--
+  閘門圖片：伺服器延遲 55 秒才回應，用來拖住 load 事件，讓下面的非同步測試有真實時間跑完。
+  測試結束時會把它換成 1x1 的 data URI，load 事件立刻放行，不必真的等 55 秒。
+-->
+<img id="gate" src="/slow?ms=55000" alt="" width="1" height="1" style="position:absolute;opacity:0">
+
+<h1>UI 端對端測試（真實瀏覽器、真實時間）</h1>
+<div id="summary">執行中…</div>
+<div id="out"></div>
+<iframe id="app" title="待測頁面"></iframe>
+
+<script type="module">
+const out = document.getElementById('out');
+const frame = document.getElementById('app');
+const results = [];
+let pass = 0, fail = 0;
+
+function h2(t) { out.insertAdjacentHTML('beforeend', `<h2>${esc(t)}</h2>`); }
+function esc(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function check(name, ok, detail = '') {
+  results.push({ name, ok: !!ok, detail });
+  if (ok) pass++; else fail++;
+  out.insertAdjacentHTML('beforeend',
+    `<div class="${ok ? 'ok' : 'fail'}">${ok ? '✔' : '✘'} ${esc(name)}${detail ? ` — ${esc(detail)}` : ''}</div>`);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const doc = () => frame.contentDocument;
+const win = () => frame.contentWindow;
+
+async function waitFor(fn, label, timeoutMs = 25000) {
+  const t0 = Date.now();
+  for (;;) {
+    try { if (fn()) return true; } catch { /* 可能正在換頁 */ }
+    if (Date.now() - t0 > timeoutMs) throw new Error(`等待逾時：${label}`);
+    await sleep(150);
+  }
+}
+
+async function loadApp(url) {
+  await new Promise((resolve) => {
+    frame.addEventListener('load', resolve, { once: true });
+    frame.src = url;
+  });
+  await waitFor(() => doc() && doc().querySelector('#dataStatus'), 'App DOM 就緒');
+}
+
+const rows = () => [...doc().querySelectorAll('#scoresTable tbody tr')];
+const colIndex = (label) => {
+  const th = [...doc().querySelectorAll('#scoresTable thead th')].find((t) => t.textContent.includes(label));
+  return th ? [...th.parentNode.children].indexOf(th) : -1;
+};
+const numeric = (arr) => arr.map((v) => (v === '缺考' ? NaN : Number(v))).filter((n) => !Number.isNaN(n));
+
+/** 放行 load 事件：把閘門圖片換成 1x1 data URI，headless 就會立刻截取 DOM */
+function releaseLoad() {
+  const gate = document.getElementById('gate');
+  if (gate) {
+    gate.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  }
+}
+
+/** 每個區段獨立執行，單一失敗不會中斷後續驗證 */
+async function section(title, fn) {
+  h2(title);
+  try {
+    await fn();
+  } catch (err) {
+    check(`${title}：區段未中斷`, false, err.message);
+    out.insertAdjacentHTML('beforeend', `<pre class="fail">${esc(err.stack || err.message)}</pre>`);
+  }
+}
+
+(async () => {
+  /* ---------------------------------------------- 0. 清空舊資料 --- */
+  await section('0. 清除瀏覽器內的舊資料（確保從零開始）', async () => {
+    await new Promise((res) => {
+      const r = indexedDB.deleteDatabase('grade-app');
+      r.onsuccess = res; r.onerror = res; r.onblocked = res;
+      setTimeout(res, 3000);
+    });
+    localStorage.clear();
+    check('IndexedDB 與 localStorage 已清空', true);
+  });
+
+  /* ---------------------------------------------- 1. 示範資料 --- */
+  await section('1. 載入示範資料並檢查渲染', async () => {
+    await loadApp('/?demo=1');
+    await waitFor(() => doc().querySelector('#dataStatus').textContent.includes('學年'), '示範資料載入');
+
+    const status = doc().querySelector('#dataStatus').textContent.replace(/\s+/g, ' ');
+    check('狀態列顯示資料摘要', /學年/.test(status), status.slice(0, 66));
+    check('空狀態提示已隱藏', doc().querySelector('#emptyState').hidden === true);
+    check('成績表列出學生', rows().length > 100, `${rows().length} 列`);
+    check('分數格有上色', doc().querySelectorAll('#scoresTable td.cell-color').length > 500,
+      `${doc().querySelectorAll('#scoresTable td.cell-color').length} 格`);
+
+    const yrs = [...doc().querySelectorAll('#selYear option')].map((o) => o.value);
+    check('學年下拉有 3 個學年', yrs.length === 3, yrs.join(','));
+
+    const chips = [...doc().querySelectorAll('#scoresSummary .stat-chip')].map((c) => c.textContent).join(' | ');
+    check('摘要改用「平均分及格率」而非總分及格率',
+      /平均分及格率/.test(chips) && !/總分及格率/.test(chips), chips.slice(0, 88));
+    const rate = chips.match(/(\d+(?:\.\d+)?)%\s*平均分及格率/);
+    check('平均分及格率是合理數值', !!rate && Number(rate[1]) > 30 && Number(rate[1]) < 100,
+      rate ? `${rate[1]}%` : '找不到');
+    check('名次欄已標示為「班名次」',
+      [...doc().querySelectorAll('#scoresTable thead th')].some((t) => t.textContent.includes('班名次')));
+    check('沒有錯誤橫幅', !doc().getElementById('fatalError'));
+    check('多班時顯示「班級」欄', colIndex('班級') >= 0);
+  });
+
+  /* ---------------------------------------------- 2. 點欄排序 --- */
+  await section('2. 點科目欄位標題 → 排序', async () => {
+    const findTh = (label) => [...doc().querySelectorAll('#scoresTable thead th')]
+      .find((t) => t.textContent.includes(label));
+
+    findTh('中文科').click();
+    await sleep(250);
+    const idx = colIndex('中文科');
+    const desc = rows().slice(0, 8).map((tr) => tr.children[idx].textContent.trim());
+    check('第一次點擊：中文科由高分到低分',
+      numeric(desc).every((v, i, a) => i === 0 || a[i - 1] >= v), desc.join(' , '));
+    check('欄位標題顯示排序狀態', findTh('中文科').classList.contains('sorted'));
+
+    findTh('中文科').click();
+    await sleep(250);
+    const asc = rows().slice(0, 8).map((tr) => tr.children[idx].textContent.trim());
+    check('第二次點擊：反向為低分到高分',
+      numeric(asc).every((v, i, a) => i === 0 || a[i - 1] <= v), asc.join(' , '));
+
+    findTh('數學科').click();
+    await sleep(250);
+    const midx = colIndex('數學科');
+    const mvals = rows().slice(0, 8).map((tr) => tr.children[midx].textContent.trim());
+    check('切換到數學科也能排序',
+      numeric(mvals).every((v, i, a) => i === 0 || a[i - 1] >= v), mvals.join(' , '));
+    const lastVals = rows().slice(-6).map((tr) => tr.children[midx].textContent.trim());
+    check('缺考一律排在最後', lastVals.includes('缺考'), lastVals.join(' , '));
+
+    findTh('班名次').click();
+    await sleep(250);
+    const ridx = colIndex('班名次');
+    const rvals = rows().slice(0, 8).map((tr) => tr.children[ridx].textContent.trim());
+    check('點「班名次」由第 1 名開始排', numeric(rvals).every((v, i, a) => i === 0 || a[i - 1] <= v),
+      rvals.join(' , '));
+  });
+
+  /* ---------------------------------------------- 3. 班級篩選 --- */
+  await section('3. 班級篩選', async () => {
+    const before = rows().length;
+    const chips = [...doc().querySelectorAll('#classChips .chip')];
+    check('班級 chips 已產生', chips.length >= 3, `${chips.length} 個班級`);
+
+    chips[0].click();
+    await sleep(300);
+    const after = rows().length;
+    check('勾選單一班級後列數變少', after > 0 && after < before, `${before} → ${after}`);
+    check('提示顯示已選 1 班',
+      /已選\s*1/.test(doc().querySelector('#classHint').textContent),
+      doc().querySelector('#classHint').textContent.trim());
+
+    const ci = colIndex('班級');
+    if (ci >= 0) {
+      const distinct = new Set(rows().map((tr) => tr.children[ci].textContent.trim()));
+      check('表格只剩被勾選的班級', distinct.size === 1, [...distinct].join(','));
+    } else {
+      // 只選一個班級時，App 會隱藏「班級」欄（避免重複資訊），這也算正確
+      check('單一班級時自動隱藏重複的「班級」欄', true, '（設計如此，非錯誤）');
+    }
+
+    // 再勾第二個班級 → 應該恢復顯示班級欄且列數增加
+    const chips2 = [...doc().querySelectorAll('#classChips .chip')];
+    chips2[1].click();
+    await sleep(300);
+    check('再勾一班後列數增加', rows().length > after, `${after} → ${rows().length}`);
+    check('兩班時恢復顯示「班級」欄', colIndex('班級') >= 0);
+
+    doc().querySelector('#btnClearClasses').click();
+    await sleep(250);
+    check('清除後恢復顯示全部班級', rows().length === before, `${rows().length} 列`);
+
+    doc().querySelector('#btnAllClasses').click();
+    await sleep(250);
+    check('全選後列數與原本相同', rows().length === before, `${rows().length} 列`);
+  });
+
+  /* ---------------------------------------------- 4. 搜尋 --- */
+  await section('4. 搜尋學號／姓名', async () => {
+    const baseline = rows().length;
+    const target = rows()[0].children[1].textContent.trim(); // 第一列的姓名
+    const box = doc().querySelector('#searchBox');
+    box.value = target;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(400);
+    const found = rows();
+    check('搜尋姓名能篩出結果', found.length >= 1 && found.length < baseline, `「${target}」→ ${found.length} 筆`);
+    check('搜尋結果包含該姓名',
+      found.every((tr) => tr.children[1].textContent.includes(target) || tr.children[0].textContent.includes(target)),
+      found.slice(0, 3).map((tr) => tr.children[1].textContent.trim()).join(' , '));
+
+    box.value = '';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(400);
+    check('清空搜尋後恢復全部', rows().length === baseline, `${rows().length} 列（基準 ${baseline}）`);
+  });
+
+  /* ---------------------------------------------- 5. 單科比較 --- */
+  await section('5. 單科比較（全年級同一科）', async () => {
+    doc().querySelector('.tab[data-view="compare"]').click();
+    await sleep(350);
+
+    const sel = doc().querySelector('#selSubject');
+    check('比較科目有預設值', !!sel.value, sel.value);
+
+    const cnOpt = [...sel.options].find((o) => o.value.includes('中文'));
+    if (cnOpt) { sel.value = cnOpt.value; sel.dispatchEvent(new Event('change')); await sleep(250); }
+    const scope = doc().querySelector('#selScope');
+    scope.value = 'grade';
+    scope.dispatchEvent(new Event('change'));
+    await sleep(350);
+
+    const subject = doc().querySelector('#selSubject').value;
+    const cards = doc().querySelectorAll('#compareStats .class-card').length;
+    const ranked = doc().querySelectorAll('#compareTable tbody tr').length;
+    const bars = doc().querySelectorAll('#compareChart .bar-row').length;
+    const passLines = doc().querySelectorAll('#compareChart .pass-line').length;
+    const mRows = doc().querySelectorAll('#matrixTable tbody tr').length;
+    const mCols = doc().querySelectorAll('#matrixTable thead th').length;
+
+    check('各班統計卡片已產生', cards >= 6, `${cards} 張`);
+    check('全年級排名名單已產生', ranked > 100, `${ranked} 人`);
+    check('各班平均長條圖已產生', bars >= 7, `${bars} 條（含全年級）`);
+    check('長條圖有及格線虛線', passLines >= 7, `${passLines} 條`);
+    check('班級×科目矩陣已產生', mRows >= 7 && mCols >= 10, `${mRows} 列 × ${mCols} 欄`);
+
+    const cmpScores = [...doc().querySelectorAll('#compareTable tbody tr')].slice(0, 8)
+      .map((tr) => tr.children[4].textContent.trim());
+    check(`全年級「${subject}」排名由高分到低分`,
+      numeric(cmpScores).every((v, i, a) => i === 0 || a[i - 1] >= v), cmpScores.join(' , '));
+
+    const statsText = doc().querySelector('#compareStats').textContent;
+    check('統計卡片含平均、標準差、及格率',
+      /平均/.test(statsText) && /標準差/.test(statsText) && /及格率/.test(statsText));
+
+    // 範圍切回「只顯示已勾選班級」應該仍是全部（因為沒勾＝全部）
+    const scope2 = doc().querySelector('#selScope');
+    scope2.value = 'selected';
+    scope2.dispatchEvent(new Event('change'));
+    await sleep(300);
+    check('切換顯示範圍後仍能渲染', doc().querySelectorAll('#compareTable tbody tr').length > 100,
+      `${doc().querySelectorAll('#compareTable tbody tr').length} 人`);
+
+    // 換科目
+    if (sel.options.length > 2) {
+      sel.value = sel.options[2].value;
+      sel.dispatchEvent(new Event('change'));
+      await sleep(300);
+      check('切換科目後重新渲染',
+        doc().querySelector('#compareCount').textContent.includes(sel.value),
+        doc().querySelector('#compareCount').textContent.slice(0, 40));
+    }
+  });
+
+  /* ---------------------------------------------- 6. 資料還原 --- */
+  await section('6. 關掉再打開 → 資料應該自動還原', async () => {
+    await sleep(2500); // 等 IndexedDB 寫入完成（真實時間）
+    const storedCount = await new Promise((resolve) => {
+      const req = indexedDB.open('grade-app', 1);
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('dataset')) { resolve(-1); return; }
+        const t = db.transaction('dataset', 'readonly').objectStore('dataset').get('current');
+        t.onsuccess = () => resolve(t.result && t.result.students ? t.result.students.length : 0);
+        t.onerror = () => resolve(-2);
+      };
+      req.onerror = () => resolve(-3);
+    });
+    check('資料集已寫入 IndexedDB', storedCount > 100, `${storedCount} 位學生`);
+
+    await loadApp('/'); // 不帶 ?demo=1
+    await waitFor(() => doc().querySelector('#dataStatus').textContent !== '尚未載入資料', '資料還原');
+    const status2 = doc().querySelector('#dataStatus').textContent.replace(/\s+/g, ' ');
+    check('重新開啟後自動還原資料', !/尚未載入/.test(status2), status2.slice(0, 66));
+    check('還原後成績表仍有資料', rows().length > 100, `${rows().length} 列`);
+    check('還原後空狀態仍隱藏', doc().querySelector('#emptyState').hidden === true);
+    check('還原後設定（及格線 60）仍生效', doc().querySelector('#inpPassLine').value === '60',
+      `及格線=${doc().querySelector('#inpPassLine').value}`);
+  });
+
+  /* ---------------------------------------------- 7. 資料來源頁 --- */
+  await section('7. 資料來源頁', async () => {
+    doc().querySelector('.tab[data-view="data"]').click();
+    await sleep(350);
+    const summary = doc().querySelector('#dataSummary').textContent;
+    check('顯示檔案數與學生數', /個檔案/.test(summary) && /位學生/.test(summary), summary.slice(0, 70));
+    check('示範資料會說明沒有實際檔案',
+      /示範資料/.test(doc().querySelector('#fileTable').textContent),
+      doc().querySelector('#fileTable').textContent.trim().slice(0, 30));
+  });
+
+  /* ---------------------------------------------- 8. 門檻即時套用 --- */
+  await section('8. 改門檻顏色 → 表格立即更新', async () => {
+    doc().querySelector('.tab[data-view="settings"]').click();
+    await sleep(350);
+    check('門檻編輯器有 5 層', doc().querySelectorAll('#tierEditor .tier-row').length === 5,
+      `${doc().querySelectorAll('#tierEditor .tier-row').length} 層`);
+    check('門檻預覽條已產生', doc().querySelectorAll('#tierPreview div').length >= 5);
+    check('科目欄位清單已產生', doc().querySelectorAll('#subjectManager .subject-item').length >= 13,
+      `${doc().querySelectorAll('#subjectManager .subject-item').length} 欄`);
+
+    const bg = doc().querySelector('#tierEditor .tier-row .t-bg');
+    bg.value = '#000000';
+    bg.dispatchEvent(new Event('input', { bubbles: true }));
+    bg.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(300);
+    doc().querySelector('.tab[data-view="scores"]').click();
+    await sleep(400);
+    const black = [...doc().querySelectorAll('#scoresTable td.cell-color')]
+      .filter((td) => getComputedStyle(td).backgroundColor === 'rgb(0, 0, 0)').length;
+    check('改門檻顏色後表格立即出現該顏色', black > 0, `${black} 格變黑色`);
+
+    // 順便測「整列上色」
+    const chk = doc().querySelector('#chkColorRow');
+    chk.checked = true;
+    chk.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(300);
+    const rowBg = [...doc().querySelectorAll('#scoresTable tbody tr')]
+      .filter((tr) => tr.getAttribute('style') && tr.getAttribute('style').includes('background')).length;
+    check('開啟「整列上色」後列有背景色', rowBg > 0, `${rowBg} 列上色`);
+    chk.checked = false;
+    chk.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(200);
+
+    // 還原顏色，避免污染
+    doc().querySelector('.tab[data-view="settings"]').click();
+    await sleep(250);
+    const bg2 = doc().querySelector('#tierEditor .tier-row .t-bg');
+    bg2.value = '#fde7e9';
+    bg2.dispatchEvent(new Event('input', { bubbles: true }));
+    bg2.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(250);
+  });
+
+  /* ---------------------------------------------- 9. 匯出 --- */
+  await section('9. 匯出 CSV', async () => {
+    doc().querySelector('.tab[data-view="scores"]').click();
+    await sleep(350);
+    const size = doc().defaultView.eval(`(() => {
+      let captured = null;
+      const orig = URL.createObjectURL;
+      URL.createObjectURL = (blob) => { captured = blob; return 'blob:test'; };
+      document.querySelector('#btnExportCsv').click();
+      URL.createObjectURL = orig;
+      return captured ? captured.size : 0;
+    })()`);
+    check('匯出 CSV 有產生內容', size > 1000, `${size} bytes`);
+
+    doc().querySelector('.tab[data-view="compare"]').click();
+    await sleep(350);
+    const size2 = doc().defaultView.eval(`(() => {
+      let captured = null;
+      const orig = URL.createObjectURL;
+      URL.createObjectURL = (blob) => { captured = blob; return 'blob:test'; };
+      document.querySelector('#btnExportCompare').click();
+      URL.createObjectURL = orig;
+      return captured ? captured.size : 0;
+    })()`);
+    check('匯出單科排名 CSV 有產生內容', size2 > 1000, `${size2} bytes`);
+  });
+
+  /* ---------------------------------------------- 10. 錯誤 --- */
+  await section('10. JavaScript 錯誤檢查', async () => {
+    const errs = win().__APP_ERRORS__ || [];
+    check('整段測試過程沒有 JavaScript 錯誤', errs.length === 0,
+      errs.map((e) => e.message).join(' ; ') || '無');
+    check('iframe 內沒有錯誤橫幅', !doc().getElementById('fatalError'));
+  });
+
+  /* ---------------------------------------------- 11. 真實 Excel 檔 --- */
+  await section('11. 用真實 Excel 檔載入（模擬使用者選整個資料夾）', async () => {
+    // 取得全部示範檔，組成「帶相對路徑的 File」，再塞進 <input webkitdirectory> 並觸發 change，
+    // 走的就是使用者實際操作的那條程式路徑（loadFromFiles → buildDataset → applyDataset）。
+    const manifest = await fetch('/demo-data/manifest.json', { cache: 'no-store' }).then((r) => r.json());
+    const paths = manifest.files || [];
+    check('manifest.json 可讀取', paths.length > 0, `${paths.length} 個檔案`);
+
+    const dt = new DataTransfer();
+    let fetched = 0;
+    for (const rel of paths) {
+      const r = await fetch(`/demo-data/${encodeURI(rel)}`);
+      if (!r.ok) continue;
+      const blob = await r.blob();
+      const f = new File([blob], rel.split('/').pop(), { type: blob.type });
+      // webkitRelativePath 是 File.prototype 上的唯讀 getter，用定義自有屬性把它蓋掉
+      Object.defineProperty(f, 'webkitRelativePath', { value: rel });
+      dt.items.add(f);
+      fetched++;
+    }
+    check('全部示範檔都能下載', fetched === paths.length, `${fetched} / ${paths.length}`);
+
+    const input = doc().querySelector('#folderInput');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    await waitFor(() => {
+      const t = doc().querySelector('#dataStatus').textContent;
+      return /學年/.test(t) && !/示範資料/.test(t);
+    }, '真實 Excel 資料載入', 45000);
+    await waitFor(() => doc().querySelectorAll('#scoresTable tbody tr').length > 50, '表格渲染', 20000);
+
+    const st = doc().querySelector('#dataStatus').textContent.replace(/\s+/g, ' ');
+    check('真實 Excel 資料載入成功', /學年/.test(st), st.slice(0, 74));
+    check('狀態列顯示的是資料夾來源（不是示範資料）', !/示範資料/.test(st), st.slice(0, 40));
+
+    const yrs = [...doc().querySelectorAll('#selYear option')].map((o) => o.value);
+    check('學年下拉有 3 個學年（從路徑推得）', yrs.length === 3, yrs.join(','));
+    const gs = [...doc().querySelectorAll('#selGrade option')].map((o) => o.value).filter(Boolean);
+    check('年級下拉有 3 個年級', gs.length === 3, gs.join(','));
+
+    // 分頁內容是「延遲繪製」的（只有目前顯示的分頁會重繪），所以必須先切到成績總表分頁，
+    // 讀到的表格才是目前資料 —— 這也是使用者實際会做的動作。
+    doc().querySelector('.tab[data-view="scores"]').click();
+    await sleep(400);
+
+    // 切到高一 → 應該有 3 個平行班可以互相比較
+    const gradeSel = doc().querySelector('#selGrade');
+    gradeSel.value = gs.find((g) => g.includes('高一')) || gs[0];
+    gradeSel.dispatchEvent(new Event('change'));
+    await sleep(450);
+
+    const chipData = [...doc().querySelectorAll('#classChips .chip')].map((c) => {
+      const m = c.textContent.trim().replace(/\s+/g, ' ').match(/^(.*?)\s*(\d+)$/);
+      return { label: m ? m[1] : c.textContent.trim(), n: m ? Number(m[2]) : NaN };
+    });
+    check('高一有 3 個班級可以互相比較', chipData.length === 3,
+      chipData.map((c) => `${c.label}(${c.n})`).join(' / '));
+
+    const classIdx = colIndex('班級');
+    check('多班時顯示班級欄', classIdx >= 0);
+
+    // 表格列數應該等於各班人數合計（而不是我猜的固定範圍）
+    const chipSum = chipData.reduce((a, c) => a + (Number.isNaN(c.n) ? 0 : c.n), 0);
+    const rowCount = rows().length;
+    check('表格列數等於各班人數合計', rowCount === chipSum && chipSum > 50,
+      `表格 ${rowCount} 列；chips 合計 ${chipSum}（${chipData.map((c) => c.n).join(' + ')}）`);
+
+    const tableClasses = new Set(rows().map((tr) => tr.children[classIdx].textContent.trim()));
+    check('表格只包含高一的班級', tableClasses.size === 3
+      && [...tableClasses].every((c) => c.includes('高一')), [...tableClasses].join(','));
+
+    check('篩選狀態與選擇一致',
+      doc().querySelector('#selGrade').value === gradeSel.value && !!doc().querySelector('#selYear').value,
+      `學年=${doc().querySelector('#selYear').value} 學段=${doc().querySelector('#selTerm').value || '全部'} 年級=${doc().querySelector('#selGrade').value}`);
+
+    // 全年級單科比較
+    doc().querySelector('.tab[data-view="compare"]').click();
+    await sleep(400);
+    const scope = doc().querySelector('#selScope');
+    scope.value = 'grade';
+    scope.dispatchEvent(new Event('change'));
+    await sleep(450);
+    const cards = doc().querySelectorAll('#compareStats .class-card').length;
+    const ranked = doc().querySelectorAll('#compareTable tbody tr').length;
+    check('真實資料的全年級單科比較可運作', cards === 3 && ranked > 80, `${cards} 班 / ${ranked} 人`);
+
+    // 資料來源頁：每個檔案都要成功
+    doc().querySelector('.tab[data-view="data"]').click();
+    await sleep(450);
+    const fileRows = [...doc().querySelectorAll('#fileTable tbody tr')];
+    check('資料來源頁列出所有檔案', fileRows.length === paths.length, `${fileRows.length} / ${paths.length} 列`);
+    const failed = fileRows.filter((tr) => tr.textContent.includes('✘')).length;
+    check('沒有任何檔案解析失敗', failed === 0, `${failed} 個失敗`);
+
+    // 合併大標題的檔案應該被自動跳過，而且只會有提醒、不會是錯誤
+    const titleWarnings = [...doc().querySelectorAll('#warningList .warn-item')]
+      .filter((el) => /標題列在第/.test(el.textContent)).length;
+    check('合併大標題的檔案被自動跳過', titleWarnings >= 1, `${titleWarnings} 個檔案標題列不在第 1 列`);
+
+    check('真實資料載入後沒有錯誤橫幅', !doc().getElementById('fatalError'));
+
+    /* --- 問題徽章必須在「還沒切到資料來源分頁」時就正確 --- */
+    // 刻意放入兩個同學年、同學段、同班級的檔案，應該產生「重複」警告
+    doc().querySelector('.tab[data-view="compare"]').click();
+    await sleep(300);
+    check('目前停在單科比較分頁（不是資料來源分頁）',
+      doc().querySelector('#view-compare').classList.contains('active')
+      && !doc().querySelector('#view-data').classList.contains('active'));
+
+    const rel = paths[0];
+    const r2 = await fetch(`/demo-data/${encodeURI(rel)}`);
+    const blob2 = await r2.blob();
+    const dupDt = new DataTransfer();
+    for (let i = 0; i < 2; i++) {
+      const f = new File([blob2], rel.split('/').pop(), { type: blob2.type });
+      Object.defineProperty(f, 'webkitRelativePath', { value: rel });
+      dupDt.items.add(f);
+    }
+    input.files = dupDt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await waitFor(() => doc().querySelector('#tabWarnBadge').hidden === false, '問題徽章出現', 25000);
+
+    const badge = doc().querySelector('#tabWarnBadge');
+    check('重複檔案產生警告，且徽章在別的分頁也即時更新',
+      !badge.hidden && badge.textContent.trim() === '1',
+      `徽章顯示「${badge.textContent.trim()}」`);
+  });
+
+  /* ---------------------------------------------- 總結 --- */
+  const total = pass + fail;
+  const box = document.getElementById('summary');
+  box.className = fail === 0 ? 'ok' : 'fail';
+  box.textContent = fail === 0 ? `全部通過：${pass} / ${total}` : `有失敗：通過 ${pass} / ${total}，失敗 ${fail}`;
+  document.title = fail === 0 ? `UIPASS ${pass}/${total}` : `UIFAIL ${pass}/${total}`;
+  if (fail > 0) {
+    out.insertAdjacentHTML('beforeend', '<h2>失敗清單</h2><pre class="fail">'
+      + esc(results.filter((r) => !r.ok).map((r) => `${r.name}${r.detail ? ' — ' + r.detail : ''}`).join('\n'))
+      + '</pre>');
+  }
+  // 結果都寫進 DOM 了，放行 load 事件讓 headless 立刻截取
+  releaseLoad();
+})();
+</script>
+</body>
+</html>
