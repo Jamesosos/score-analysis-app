@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>等待中</title>
+<style>
+  body { font-family: Consolas, monospace; font-size: 13px; padding: 16px; background: #111; color: #ddd; }
+  .ok { color: #4ade80; } .fail { color: #f87171; font-weight: bold; } pre { background:#1a1a1a; padding:8px; }
+</style>
+</head>
+<body>
+
+<!--
+  這張圖片由伺服器延遲 12 秒才回應，用來拖住 load 事件。
+  在這段時間內，主執行緒是空閒的，所以 IndexedDB 的非同步工作可以用「真實時間」完成。
+  如果不這樣做，headless 瀏覽器會在 load 事件當下就截取 DOM，非同步結果還沒寫進去。
+-->
+<img src="/slow?ms=12000" alt="" width="1" height="1" style="position:absolute;opacity:0">
+
+<h1>IndexedDB 持久化測試（真實時間）</h1>
+<div id="out"></div>
+
+<script type="module">
+import { saveDataset, loadDataset, clearDataset, loadSettings, saveSettings } from '../js/store.js';
+
+const out = document.getElementById('out');
+const mode = new URLSearchParams(location.search).get('mode') || 'write';
+const results = [];
+
+function log(cls, text) {
+  results.push(text);
+  out.insertAdjacentHTML('beforeend', `<div class="${cls}">${text}</div>`);
+}
+
+function finish() {
+  document.title = results.join(' ~ ');
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  out.appendChild(pre);
+}
+
+function makeDataset() {
+  return {
+    version: 1,
+    loadedAt: new Date().toISOString(),
+    sourceName: '持久化測試',
+    files: [], skipped: [], warnings: [],
+    students: [
+      { id: '99001', name: '測試甲', scores: { 中文科: 88, 英文科: 71 }, cells: { 中文科: 88, 英文科: 71 },
+        info: { 操行: 'A' }, derived: {}, sum: 159, avg: 79.5, subjectCount: 2, fileTotal: 159,
+        fileRank: 1, totalMismatch: false, rowNumber: 2, year: '113學年', term: '上學期',
+        className: '高一A班', grade: '高一', filePath: '113學年/上學期/高一A班.xlsx', rankInClass: 1 },
+      { id: '99002', name: '測試乙', scores: { 中文科: 45, 英文科: 60 }, cells: { 中文科: 45, 英文科: 60 },
+        info: { 操行: 'C' }, derived: {}, sum: 105, avg: 52.5, subjectCount: 2, fileTotal: 105,
+        fileRank: 2, totalMismatch: false, rowNumber: 3, year: '113學年', term: '上學期',
+        className: '高一A班', grade: '高一', filePath: '113學年/上學期/高一A班.xlsx', rankInClass: 2 },
+    ],
+    subjects: ['中文科', '英文科'],
+    columns: [{ header: '學號', role: 'id', count: 1, numericRatio: 1 }],
+    years: ['113學年'], terms: ['上學期'], grades: ['高一'], classes: ['高一A班'],
+    periods: [{ year: '113學年', term: '上學期' }],
+    summary: { fileCount: 1, okFileCount: 1, failedFileCount: 0, studentCount: 2,
+               subjectCount: 2, yearCount: 1, classCount: 1, skippedCount: 0 },
+  };
+}
+
+(async () => {
+  try {
+    if (mode === 'write') {
+      await clearDataset();
+      log('ok', 'STEP 清除舊資料完成');
+
+      await saveDataset(makeDataset());
+      log('ok', 'STEP saveDataset 交易完成，沒有拋出錯誤');
+
+      const back = await loadDataset();
+      if (back && back.students && back.students.length === 2) {
+        log('ok', `WRITE_OK 同頁讀回成功：${back.students.map((s) => s.name).join('、')}`
+          + ` 中文科=${back.students.map((s) => s.scores['中文科']).join('/')}`);
+      } else {
+        log('fail', `WRITE_FAIL 同頁讀回失敗：${JSON.stringify(back && back.students)}`);
+      }
+
+      // 巢狀欄位是否完整保留
+      const s0 = back && back.students && back.students[0];
+      log(s0 && s0.info && s0.info['操行'] === 'A' ? 'ok' : 'fail', `巢狀 info 保留：${s0 && JSON.stringify(s0.info)}`);
+      log(s0 && s0.rankInClass === 1 ? 'ok' : 'fail', `rankInClass 保留：${s0 && s0.rankInClass}`);
+      log(back && back.columns && back.columns.length === 1 ? 'ok' : 'fail', `columns 保留：${back && back.columns && back.columns.length}`);
+
+      // 設定（localStorage，含 Infinity 的往返）
+      saveSettings({ passLine: 55, tiers: [{ min: 0, max: Infinity, bg: '#ffffff', fg: '#000000', label: 'x' }] });
+      const st = loadSettings();
+      log(st.passLine === 55 ? 'ok' : 'fail', `設定讀回 passLine=${st.passLine}（預期 55）`);
+      log(st.tiers && st.tiers[0].max === Infinity ? 'ok' : 'fail',
+        `Infinity 往返=${st.tiers && String(st.tiers[0].max)}（預期 Infinity）`);
+
+    } else {
+      const ds = await loadDataset();
+      if (ds && ds.students && ds.students.length === 2) {
+        log('ok', `READ_OK 跨次讀取成功：${ds.students.map((s) => s.name).join('、')}`
+          + ` 學年=${ds.years[0]} 班級=${ds.classes[0]}`);
+        log(ds.students[0].scores['中文科'] === 88 ? 'ok' : 'fail', `分數正確=${ds.students[0].scores['中文科']}`);
+        log(ds.students[0].info && ds.students[0].info['操行'] === 'A' ? 'ok' : 'fail', '巢狀 info 跨次保留');
+      } else {
+        log('fail', `READ_EMPTY 跨次讀取沒有資料：${JSON.stringify(ds && ds.students)}`);
+      }
+      const st = loadSettings();
+      log(st.passLine === 55 ? 'ok' : 'fail', `設定跨次讀取 passLine=${st.passLine}（預期 55）`);
+      log(st.tiers && st.tiers[0].max === Infinity ? 'ok' : 'fail', '設定 Infinity 跨次還原');
+    }
+  } catch (err) {
+    log('fail', `THREW 拋出例外：${err && err.message ? err.message : String(err)}`);
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

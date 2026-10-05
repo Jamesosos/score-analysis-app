@@ -1,0 +1,40 @@
+{
+  "name": "score-analysis-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "讀取 Excel 成績資料的本機網頁應用：依學年／學段／年級／班級查詢、門檻上色、排序與全年級跨班比較。零依賴、離線可用，學生成績不會離開你的電腦。",
+  "keywords": [
+    "grades",
+    "gradebook",
+    "education",
+    "excel",
+    "xlsx",
+    "pwa",
+    "offline-first",
+    "privacy",
+    "成績",
+    "成績查詢",
+    "學校"
+  ],
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node serve.mjs",
+    "serve": "node serve.mjs",
+    "check": "node tools/syntax-check.mjs",
+    "test": "node tools/syntax-check.mjs && echo 請啟動伺服器後開啟 http://127.0.0.1:8787/test/ui-harness.html"
+  },
+  "files": [
+    "index.html",
+    "css",
+    "js",
+    "icons",
+    "sw.js",
+    "manifest.webmanifest",
+    "serve.mjs",
+    "start.bat"
+  ]
+}
