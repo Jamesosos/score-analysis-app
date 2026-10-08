@@ -27,6 +27,7 @@ function openDb() {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
     };
+<<<<<<< HEAD
     req.onsuccess = () => {
       const db = req.result;
       db.onversionchange = () => {
@@ -35,6 +36,9 @@ function openDb() {
       };
       resolve(db);
     };
+=======
+    req.onsuccess = () => resolve(req.result);
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
@@ -102,11 +106,15 @@ export const DEFAULT_SETTINGS = {
   disabledSubjects: [],   // 被排除、不當成科目的欄位
   forcedSubjects: [],     // 被強制當成科目的欄位
   recomputeTotals: false, // 是否用各科加總取代檔案中的總分
+<<<<<<< HEAD
   colorWholeRow: false,   // 是否整列上色
   showTotals: false,      // 是否顯示總分相關欄位
   showPassRates: false,   // 是否顯示及格率（而不只分數格）
   showAverages: false,   // 是否顯示成績表下方的平均列
   showConductComponents: false, // 是否顯示基本操行與調整操行原欄
+=======
+  colorWholeRow: false,   // 是否整列上色（而不只分數格）
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 };
 
 /** 讀取設定（與預設值合併，容忍舊版缺少欄位）。 */

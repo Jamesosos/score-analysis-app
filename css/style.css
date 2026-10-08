@@ -670,6 +670,7 @@ input[type="number"] { width: 84px; min-width: 0; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast[hidden] { display: none; }
 
+<<<<<<< HEAD
 .import-review {
   position: fixed;
   inset: 0;
@@ -711,6 +712,8 @@ input[type="number"] { width: 84px; min-width: 0; }
   border-top: 1px solid var(--border);
 }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 /* ============================== 響應式 ============================== */
 
 @media (max-width: 760px) {
@@ -732,13 +735,20 @@ input[type="number"] { width: 84px; min-width: 0; }
 
 /* ============================== 列印 ============================== */
 
+<<<<<<< HEAD
 #pdfExport { display: none; }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 @media print {
   :root { --bg: #fff; }
   body { font-size: 10.5px; background: #fff; }
   .topbar-actions, .tabs, .filters, .toolbar-actions, .empty-state,
+<<<<<<< HEAD
   .loading, .toast, .import-review, #view-compare .compare-controls, .card-actions, .link-btn { display: none !important; }
+=======
+  .loading, .toast, #view-compare .compare-controls, .card-actions, .link-btn { display: none !important; }
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   .app { max-width: none; padding: 0; }
   .table-wrap { max-height: none; overflow: visible; border: none; box-shadow: none; }
   .grade-table thead th { position: static; background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -748,6 +758,7 @@ input[type="number"] { width: 84px; min-width: 0; }
   .view.active { display: block !important; }
   .cell-color { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .class-card, .bars { break-inside: avoid; }
+<<<<<<< HEAD
 
   body.pdf-exporting > :not(#pdfExport) { display: none !important; }
   body.pdf-exporting #pdfExport { display: block !important; }
@@ -801,4 +812,7 @@ input[type="number"] { width: 84px; min-width: 0; }
   body.pdf-exporting #pdfExport .pdf-compare-content .grade-table th.sticky-col,
   body.pdf-exporting #pdfExport .pdf-compare-content .grade-table td.sticky-col { position: static; }
   @page { margin: 6mm; size: A4 landscape; }
+=======
+  @page { margin: 10mm; size: landscape; }
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 }

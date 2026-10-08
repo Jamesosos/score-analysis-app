@@ -108,7 +108,11 @@ export function gradeOrder(grade) {
 }
 
 const RE_YEAR = /^(?:\d{2,4}|20\d{2})[\s_-]*(?:學年|學年度|年度|學期)?$|學年|學年度|年度/;
+<<<<<<< HEAD
 const RE_TERM = /上學期|下學期|上學段|下學段|第一學段|第二學段|第三學段|第一段|第二段|第三段|學期|學段|^\s*(上|下|第一|第二|第三)\s*$|^[sS][12]$|^[tT][12]$|^term\s*[12]$/i;
+=======
+const RE_TERM = /上學期|下學期|上學段|下學段|第一學段|第二學段|第三學段|學期|學段|^\s*(上|下|第一|第二)\s*$|^[sS][12]$|^[tT][12]$|^term\s*[12]$/i;
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
 /**
  * 從相對路徑推導 metadata。
@@ -135,12 +139,18 @@ export function metaFromPath(relativePath) {
   // 若只找到一個資料夾且它不像年份，就當成年份用（單層結構）
   if (!year && !term && folders.length === 1) year = folders[0].trim();
   if (!year && folders.length > 0) year = folders[0].trim();
+<<<<<<< HEAD
   if (!term && folders.length > 1 && folders[1].trim() !== year && !gradeOf(folders[1])) {
     term = folders[1].trim();
   }
 
   const gradeFolder = folders.find((f) => gradeOf(f));
   const grade = gradeOf(className) || (gradeFolder ? gradeOf(gradeFolder) : '');
+=======
+  if (!term && folders.length > 1 && folders[1].trim() !== year) term = folders[1].trim();
+
+  const grade = gradeOf(className);
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   const extraFolders = folders.filter((f) => f.trim() !== year && f.trim() !== term);
 
   return {
@@ -249,6 +259,7 @@ function classifyColumns(headers, dataRows) {
   return cols;
 }
 
+<<<<<<< HEAD
 function canonicalSubjectCode(value) {
   const s = String(value ?? '').trim();
   if (!/^\d+$/.test(s)) return '';
@@ -281,6 +292,8 @@ function subjectLabelsFromRows(rows, headerRow, columns) {
   return labels;
 }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 /* ------------------------------------------------------------ 主解析流程 --- */
 
 /** 這列看起來像統計摘要列嗎？（平均、全班、總計…） */
@@ -312,6 +325,7 @@ export function parseSheet(rows) {
   const headers = buildHeaders(rows[headerRow] || [], width);
   const dataRows = rows.slice(headerRow + 1);
   const columns = classifyColumns(headers, dataRows);
+<<<<<<< HEAD
   const labelsByCode = subjectLabelsFromRows(rows, headerRow, columns);
   const subjectLabels = {};
   const subjectCodes = {};
@@ -328,10 +342,13 @@ export function parseSheet(rows) {
 
   // 這種版型的 A 欄是科目代碼對照清單，不是學生資訊欄。
   if (Object.keys(labelsByCode).length > 0 && columns[0]) columns[0].role = 'ignore';
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   const idCol = columns.find((c) => c.role === 'id');
   const nameCol = columns.find((c) => c.role === 'name');
   const subjectCols = columns.filter((c) => c.role === 'subject');
+<<<<<<< HEAD
   const basicConductCol = columns.find((c) => c.role === 'info' && /基本\s*操行/.test(c.header));
   const adjustedConductCol = columns.find((c) => c.role === 'info' && /調整\s*操行/.test(c.header));
   const conductColumns = [basicConductCol, adjustedConductCol].filter(Boolean);
@@ -344,12 +361,18 @@ export function parseSheet(rows) {
     });
   }
   const finalConductHeader = finalConductColumn ? finalConductColumn.header : '操行總分';
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   if (headerRow > 0) warnings.push(`標題列在第 ${headerRow + 1} 列（前面有大標題列，已自動跳過）`);
   if (!nameCol) warnings.push('找不到「姓名」欄位，將以學號代替顯示');
   if (subjectCols.length === 0) warnings.push('找不到任何科目分數欄位，請在設定中手動指定');
 
+<<<<<<< HEAD
   const subjects = subjectCols.map((c) => c.subjectKey || c.header);
+=======
+  const subjects = subjectCols.map((c) => c.header);
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   const students = [];
 
   for (let i = 0; i < dataRows.length; i++) {
@@ -357,11 +380,16 @@ export function parseSheet(rows) {
     const rawId = idCol ? row[idCol.index] : '';
     const rawName = nameCol ? row[nameCol.index] : '';
 
+<<<<<<< HEAD
     const explicitId = rawId === undefined || rawId === null ? '' : String(rawId).trim();
     const rawNameText = rawName === undefined || rawName === null ? '' : String(rawName).trim();
     const namePrefix = /^(\d+)\s*[.．、]\s*/.exec(rawNameText);
     const id = explicitId || (namePrefix ? namePrefix[1] : '');
     const name = namePrefix ? rawNameText.slice(namePrefix[0].length).trim() : rawNameText;
+=======
+    const id = rawId === undefined || rawId === null ? '' : String(rawId).trim();
+    const name = rawName === undefined || rawName === null ? '' : String(rawName).trim();
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
     // 整列空的
     const hasAny = row.some((v) => v !== undefined && v !== null && String(v).trim() !== '');
@@ -375,7 +403,11 @@ export function parseSheet(rows) {
 
     const scores = {};
     for (const sc of subjectCols) {
+<<<<<<< HEAD
       scores[sc.subjectKey || sc.header] = parseScore(row[sc.index]);
+=======
+      scores[sc.header] = parseScore(row[sc.index]);
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     }
 
     const info = {};
@@ -384,6 +416,7 @@ export function parseSheet(rows) {
       const v = row[c.index];
       info[c.header] = v === undefined || v === null ? '' : v;
     }
+<<<<<<< HEAD
     if (conductColumns.length) {
       const rawConduct = conductColumns.map((c) => row[c.index]);
       const presentConduct = rawConduct.filter((v) => v !== undefined && v !== null && String(v).trim() !== '');
@@ -395,6 +428,8 @@ export function parseSheet(rows) {
         info[finalConductHeader] = Math.round(total * 100) / 100;
       }
     }
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
     // 保留每一欄的原始值。用途：使用者若在設定中把某個「備註資訊」欄
     // 改成科目，我們仍然必須拿得到那個欄位的分數，不必重新讀檔。
@@ -403,9 +438,12 @@ export function parseSheet(rows) {
       const v = row[c.index];
       cells[c.header] = v === undefined || v === null ? '' : v;
     }
+<<<<<<< HEAD
     if (Object.prototype.hasOwnProperty.call(info, finalConductHeader)) {
       cells[finalConductHeader] = info[finalConductHeader];
     }
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
     const derived = {};
     for (const c of columns) {
@@ -454,7 +492,11 @@ export function parseSheet(rows) {
     warnings.push(`有 ${mismatch} 位學生的「總分」與各科加總不一致（可能是總分含操行調整或其他加分）`);
   }
 
+<<<<<<< HEAD
   return { columns, headerRow, students, subjects, subjectLabels, subjectCodes, absentCount, warnings };
+=======
+  return { columns, headerRow, students, subjects, absentCount, warnings };
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 }
 
 /**
@@ -480,14 +522,22 @@ export function parseWorkbook(workbook, relativePath) {
   }
 
   if (candidates.length === 0) {
+<<<<<<< HEAD
     return { meta, students: [], subjects: [], subjectLabels: {}, subjectCodes: {}, columns: [], warnings: ['檔案中沒有可讀取的工作表'], sheetName: '', ok: false };
+=======
+    return { meta, students: [], subjects: [], columns: [], warnings: ['檔案中沒有可讀取的工作表'], sheetName: '', ok: false };
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   }
 
   candidates.sort((a, b) => b.score - a.score);
   const best = candidates[0];
 
   if (best.error) {
+<<<<<<< HEAD
     return { meta, students: [], subjects: [], subjectLabels: {}, subjectCodes: {}, columns: [], warnings: [`工作表「${best.sheetName}」解析失敗：${best.error}`], sheetName: best.sheetName, ok: false };
+=======
+    return { meta, students: [], subjects: [], columns: [], warnings: [`工作表「${best.sheetName}」解析失敗：${best.error}`], sheetName: best.sheetName, ok: false };
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   }
 
   const warnings = [...best.parsed.warnings];
@@ -500,8 +550,11 @@ export function parseWorkbook(workbook, relativePath) {
     sheetName: best.sheetName,
     students: best.parsed.students,
     subjects: best.parsed.subjects,
+<<<<<<< HEAD
     subjectLabels: best.parsed.subjectLabels || {},
     subjectCodes: best.parsed.subjectCodes || {},
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     columns: best.parsed.columns,
     absentCount: best.parsed.absentCount || {},
     headerRow: best.parsed.headerRow,

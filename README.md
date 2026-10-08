@@ -76,7 +76,7 @@
 | 📤 **匯出 CSV / PDF** | 成績 PDF 依班級分頁、按學號排序並附學年／班級／學段／匯出日期標題；可匯出目前所選班級或目前範圍全部班級 |
 | 📱 **可安裝成 App** | PWA，手機、平板可加到主畫面，可離線使用 |
 | 🧩 **零依賴** | 沒有任何 npm 套件、沒有 CDN、沒有後端。所有程式碼都在這個 repo |
-| 🔒 **資料不外傳** | 沒有伺服器、沒有上傳、沒有追蹤、沒有網路請求 |
+| 🔒 **資料留在本機** | 沒有雲端成績服務、資料上傳或追蹤；本機伺服器只負責提供程式檔案 |
 
 ### 解析器的容錯能力
 
@@ -127,7 +127,7 @@ Windows 使用者也可以直接雙擊 **`start.bat`**。
 
 會載入內建示範資料（程式即時產生的假資料，**不是**你的真實資料）。
 
-`demo-data/` 也有一份用 Python 產生的 54 個 Excel 示範檔，可以直接選那個資料夾來體驗「選資料夾」的完整流程：
+`demo-data/` 內有用 Python 產生的合成 Excel 示範資料，可直接選該資料夾體驗「選資料夾」的完整流程：
 
 ```
 demo-data/          ← 選這一個
@@ -221,7 +221,8 @@ demo-data/          ← 選這一個
 - 「重算總分名次」：用各科加總取代 Excel 裡的總分與名次
 - 「整列上色」：整列上色，方便一眼掃出成績落後的學生
 - 班名次放在成績與資訊欄之後
-- 「匯出 CSV」「匯出 PDF」；PDF 會匯出目前開啟的頁面，並開啟瀏覽器列印視窗，選擇「另存為 PDF」（使用橫向版面）
+- 「匯出 CSV」「匯出 PDF」；成績 PDF 會依班級分頁、按學號排序，並附上學年、班級、學段與匯出日期。可匯出目前選取班級，或用「全部班級 PDF」匯出目前學年／學段／年級範圍的所有班級
+- 單科比較頁亦可匯出 PDF，標題會包含學年、比較範圍、學段與匯出日期；按下匯出後，在瀏覽器列印視窗選擇「另存為 PDF」
 - 再次匯入資料夾時，先比較目前與新資料，列出新增／移除／變更的檔案、學生及欄位；確認後才取代目前資料，取消則保留原資料
 - 年級選單會保留所選學年及學段下的所有年級，可直接由一個年級切換到另一個年級
 
@@ -258,20 +259,18 @@ demo-data/          ← 選這一個
 
 **學生成績是個人資料。** 所以：
 
-- ❌ **沒有後端伺服器**。整個 repo 裡沒有一行伺服器端程式碼在處理你的資料
-- ❌ **沒有上傳**。程式不會把你的 Excel 或解析結果送到任何地方
-- ❌ **沒有網路請求**。開啟 `index.html` 之後，即使拔掉網路線也完全可用
+- ❌ **沒有雲端成績服務或上傳**。Excel 與解析結果不會被送到網際網路上的服務
 - ❌ **沒有分析、追蹤、遙測、廣告**
 - ✅ 所有解析都在你的瀏覽器裡完成
 - ✅ 解析結果只存在你自己電腦的瀏覽器儲存空間（IndexedDB），隨時可以一鍵清除
-- ✅ Service Worker 只快取**程式本身**，刻意不快取任何成績資料
+- ✅ Service Worker 只快取**程式本身**，不快取任何成績資料
+- ℹ️ 使用 `node serve.mjs` 時，瀏覽器會透過本機位址讀取程式檔案；這不是雲端服務，也不會上傳成績
 
 ### ⚠️ 如果你要 fork 或修改這個專案
 
-**這個 repo 是公開的，請不要把真實的成績檔提交進去。**
+**不要把真實的成績檔放進這個 repo，也不要提交到 Git。**
 
-`.gitignore` 已經幫你擋掉所有 `*.xlsx` / `*.csv`（只有 `demo-data/` 裡的示範資料例外）。
-但推上去之前，還是請再看一次 `git status` 確認清單裡沒有真實資料。
+`.gitignore` 會忽略一般位置的 Excel／CSV；為了讓合成測試資料可供測試，`demo-data/` 中的 Excel 是例外，會被 Git 看見。請把真實資料放在 repo 外的資料夾，推送前執行 `git status --short`，確認沒有成績檔或其他個人資料。
 
 ---
 
@@ -293,7 +292,13 @@ demo-data/          ← 選這一個
 可以。把整個資料夾複製給對方即可，資料仍然只留在各自的電腦上（他們需要自己選自己的資料夾）。
 
 **Q：手機可以看嗎？**
-可以。用方法二啟動伺服器後，手機連同一個 Wi-Fi 連到 `http://你的電腦IP:8787/` 即可。
+可以。讓本機伺服器監聽區域網路介面後，手機連同一個 Wi-Fi 開啟電腦的 IP 位址：
+
+```bash
+node serve.mjs 8787 0.0.0.0
+```
+
+然後在手機開啟 `http://你的電腦IP:8787/`。只對可信任的區域網路開放，不要直接暴露到網際網路。
 或把整個資料夾放到任何靜態網頁空間（GitHub Pages、內網 IIS／nginx 都行，因為它只是靜態檔案）。
 
 **Q：為什麼「名次」跟我算的不一樣？**
@@ -315,6 +320,7 @@ demo-data/          ← 選這一個
     ├── xlsx.js         ← 零依賴 .xlsx 讀取器（ZIP + XML）與 CSV 解析
     ├── parse.js        ← 成績表語意解析：找標題列、判斷欄位角色、抽學生
     ├── loader.js       ← 批次載入資料夾 → 組成資料集
+    ├── import-diff.js  ← 比較匯入前後的檔案、學生與欄位變化
     ├── store.js        ← IndexedDB 資料保存 + localStorage 設定
     ├── stats.js        ← 統計與顏色工具
     └── app.js          ← 介面主程式（無框架，原生 DOM）
@@ -322,6 +328,24 @@ demo-data/          ← 選這一個
 serve.mjs               零依賴靜態伺服器（只為了能用 http:// 開啟以啟用 PWA）
 sw.js                   Service Worker：只快取程式，不快取資料
 ```
+
+### 想修改功能時，從這裡開始
+
+| 想修改的內容 | 主要檔案 |
+|---|---|
+| 頁面文字、按鈕、篩選器或對話框 | `index.html` |
+| 篩選、表格、排序、匯入流程、CSV／PDF 匯出 | `js/app.js` |
+| Excel 欄位辨識、科目名稱／代碼、學號與操行解析 | `js/parse.js` |
+| 資料夾路徑、檔案讀取及組合成資料集 | `js/loader.js` |
+| Excel `.xlsx` ZIP／XML 與 CSV 低階讀取 | `js/xlsx.js` |
+| 匯入前後差異比較 | `js/import-diff.js` |
+| 平均、及格率、分數格式及門檻上色 | `js/stats.js`、`js/app.js` |
+| IndexedDB、預設顯示選項與本機設定 | `js/store.js` |
+| 畫面外觀、響應式配置、列印／PDF 版面 | `css/style.css` |
+| 離線快取資源清單 | `sw.js` |
+| 對應功能的測試 | `test/integration.html`、`test/ui-harness.html` |
+
+修改後先執行 `npm run check`；再啟動本機伺服器，開啟對應測試頁確認行為。
 
 ### 為什麼自己寫 xlsx 解析器，而不用 SheetJS？
 
@@ -348,11 +372,13 @@ sw.js                   Service Worker：只快取程式，不快取資料
 
 先啟動伺服器（`node serve.mjs`），然後用瀏覽器開啟以下頁面，結果會直接顯示在畫面上。
 
-| 測試頁 | 內容 | 目前結果 |
+| 測試頁 | 內容 | 如何確認 |
 |---|---|---|
-| [`/test/integration.html`](test/integration.html) | 分數解析、標題列偵測、CSV、真實 `.xlsx` 解析、完整資料集建構 | **83 / 83 通過** |
-| [`/test/persist.html?mode=write`](test/persist.html) → `?mode=read` | IndexedDB 寫入與跨次讀取（需同一個瀏覽器，先 write 再 read） | **全部通過** |
-| [`/test/ui-harness.html`](test/ui-harness.html) | 端對端互動：載入真實 54 個 Excel（1768 位學生）、點欄排序、班級篩選、搜尋、單科比較、門檻即時套用、匯出、資料還原 | **72 / 72 通過** |
+| [`/test/integration.html`](test/integration.html) | 分數解析、標題列偵測、CSV、`.xlsx` 解析、科目代碼與資料集建構 | 測試結果會顯示在頁面上 |
+| [`/test/persist.html?mode=write`](test/persist.html) → `?mode=read` | IndexedDB 寫入與跨次讀取（同一瀏覽器先 write 再 read） | 測試結果會顯示在頁面上 |
+| [`/test/ui-harness.html`](test/ui-harness.html) | 篩選、排序、平均與操行開關、匯入比較、各班 PDF 分頁與學號排序、資料還原 | 測試結果會顯示在頁面上 |
+
+> `ui-harness.html` 會清除該測試來源下的 IndexedDB 與 localStorage，以乾淨狀態跑測試。若瀏覽器中有重要的本機資料，請在隔離的瀏覽器設定檔或測試用瀏覽器執行。
 
 ### 語法檢查（改完程式一定要跑）
 
@@ -403,19 +429,15 @@ score-analysis-app/
 ├── package.json            只有 npm scripts，沒有依賴
 ├── .gitignore              含「擋掉真實成績檔」的防護規則
 ├── docs/                   README 用的螢幕截圖
-├── demo-data/              54 個示範 Excel + manifest.json（可刪除）
-├── tools/
-│   ├── syntax-check.mjs    語法檢查
-│   ├── gen_data.py         產生示範資料
-│   ├── gen_icons.py        產生產業圖示
-│   └── verify_*.py         示範資料的驗證腳本
+├── demo-data/              合成示範 Excel 與 manifest.json
+├── tools/                  語法檢查、示範資料及專案維護工具
 └── test/
     ├── integration.html    整合測試
     ├── persist.html        持久化測試
     └── ui-harness.html     端對端互動測試
 ```
 
-`demo-data/` 與 `tools/` 都可以直接刪掉，不影響程式運作。
+應用程式執行時不需要 `demo-data/` 或 `tools/`；但整合測試與 UI 測試會使用 `demo-data/` 的測試檔案，因此保留它們才能完整執行測試。
 
 ---
 
