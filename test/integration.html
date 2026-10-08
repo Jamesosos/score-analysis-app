@@ -36,7 +36,10 @@
 import { readTableFile, readXlsx, parseCsv } from '../js/xlsx.js';
 import { parseWorkbook, parseScore, gradeOf, metaFromPath, parseSheet } from '../js/parse.js';
 import { buildDataset } from '../js/loader.js';
+<<<<<<< HEAD
 import { compareDatasets } from '../js/import-diff.js';
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 import { summarize, tierOf, fmt } from '../js/stats.js';
 
 const out = document.getElementById('out');
@@ -75,9 +78,12 @@ h2('2. 資料夾路徑 → 學年／學段／班級／年級');
 const pathCases = [
   ['113學年/上學期/高一A班.xlsx', { year: '113學年', term: '上學期', className: '高一A班', grade: '高一' }],
   ['114學年\\下學期\\高二B班.xlsx', { year: '114學年', term: '下學期', className: '高二B班', grade: '高二' }],
+<<<<<<< HEAD
   ['2025-2026/第一段/初一/初一仁.xlsx', { year: '2025-2026', term: '第一段', className: '初一仁', grade: '初一' }],
   ['2025-2026/第二段/高一/高一文甲.xlsx', { year: '2025-2026', term: '第二段', className: '高一文甲', grade: '高一' }],
   ['2025-2026/第三段/高二/高二理甲.xlsx', { year: '2025-2026', term: '第三段', className: '高二理甲', grade: '高二' }],
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   ['113學年/上學期/班級_高一A班.xlsx', { className: '高一A班' }],
   ['112學年/上學期/初三C班.xlsx', { grade: '初三' }],
   ['113學年/上學期/S4A.xlsx', { grade: 'S4' }],
@@ -118,6 +124,7 @@ check('0 分不會被當成缺考', (() => {
   return t.students[0].scores['數學科'] === 0;
 })());
 
+<<<<<<< HEAD
 /* ---------------------------------------------------- 科目代碼對照格式 --- */
 h2('5. 科目代碼表（A 欄科名、欄標題為代碼）');
 const codedSheet = parseSheet([
@@ -208,6 +215,10 @@ check('新舊資料比較能識別檔案大小、科目欄、分數變更及新�
 
 /* ---------------------------------------------------- 真實 xlsx 檔（如果有的話） --- */
 h2('8. 真實 .xlsx 檔解析（讀取 demo-data）');
+=======
+/* ---------------------------------------------------- 真實 xlsx 檔（如果有的話） --- */
+h2('5. 真實 .xlsx 檔解析（讀取 demo-data）');
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
 async function fetchAsFile(url, name) {
   const r = await fetch(url);
@@ -294,7 +305,11 @@ check('至少有一個檔案的第 1 列是合併大標題且被正確跳過', s
 
 if (loaded.length > 0) {
   const first = loaded[0].parsed;
+<<<<<<< HEAD
   h2('7. 第一個檔案的解析細節');
+=======
+  h2('6. 第一個檔案的解析細節');
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   log(`<div>欄位角色：</div>`);
   log('<table><tr><th>欄位</th><th>角色</th><th>數值比例</th></tr>'
     + first.columns.map(c => `<tr><td>${c.header}</td><td>${c.role}</td><td>${(c.numericRatio * 100).toFixed(0)}%</td></tr>`).join('')
@@ -317,7 +332,11 @@ if (loaded.length > 0) {
   check('缺考／空白儲存格解析為 null', nulls > 0, `共 ${nulls} 筆`);
 
   /* ---- 完整資料集 ---- */
+<<<<<<< HEAD
   h2('8. 完整資料集建構（buildDataset）');
+=======
+  h2('7. 完整資料集建構（buildDataset）');
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   const allFiles = loaded.map(l => ({ file: l.file, path: l.rel }));
   try {
     const ds = await buildDataset(allFiles, { sourceName: '測試' });
@@ -352,6 +371,7 @@ if (loaded.length > 0) {
   check('demo-data 存在', false, '找不到任何 demo .xlsx 檔，請先產生示範資料');
 }
 
+<<<<<<< HEAD
 /* ------------------------------------------ 2025-2026 科目代碼 Excel --- */
 h2('9. 2025-2026 科目代碼格式（全部班級）');
 const codedPaths = [
@@ -415,6 +435,8 @@ try {
   check('2025-2026 科目代碼資料集解析', false, `${err.message}\n${err.stack}`);
 }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 /* ---------------------------------------------------- 總結 --- */
 const total = pass + fail;
 const box = document.getElementById('summary');

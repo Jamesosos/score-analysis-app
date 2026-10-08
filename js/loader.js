@@ -3,7 +3,11 @@
  * ---------------------------------------------------------------------------
  * 輸入是瀏覽器給的一堆 File 物件（來自 <input webkitdirectory> 或拖放），
  * 每個 File 都帶著 webkitRelativePath，例如 "113學年/上學期/高一A班.xlsx"，
+<<<<<<< HEAD
  * 或 "2025-2026/初一/初一仁.xlsx"，我們就靠路徑推導出學年／學段／年級／班級。
+=======
+ * 我們就靠這個路徑推導出學年／學段／班級。
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
  */
 
 import { readTableFile } from './xlsx.js';
@@ -94,7 +98,10 @@ export async function buildDataset(fileList, opts = {}) {
   const warnings = [];
   const seenClassKey = new Map();
   const columnMap = new Map(); // 欄位名稱 → { role, count, numericRatio }
+<<<<<<< HEAD
   const subjectLabels = {};
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   parsedFiles.forEach((res, i) => {
     const target = targets[i];
@@ -111,6 +118,7 @@ export async function buildDataset(fileList, opts = {}) {
 
     const { meta } = res;
 
+<<<<<<< HEAD
     Object.assign(subjectLabels, Object.fromEntries(
       Object.entries(res.subjectLabels || {}).filter(([code]) => !subjectLabels[code]),
     ));
@@ -124,6 +132,13 @@ export async function buildDataset(fileList, opts = {}) {
       const prev = columnMap.get(key);
       if (!prev) {
         columnMap.set(key, { ...storedColumn, count: 1 });
+=======
+    // 蒐集所有欄位（跨檔案取聯集），讓設定頁可以手動指定科目
+    for (const col of res.columns || []) {
+      const prev = columnMap.get(col.header);
+      if (!prev) {
+        columnMap.set(col.header, { header: col.header, role: col.role, count: 1, numericRatio: col.numericRatio });
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
       } else {
         prev.count++;
         prev.numericRatio = Math.max(prev.numericRatio, col.numericRatio);
@@ -142,7 +157,10 @@ export async function buildDataset(fileList, opts = {}) {
       grade: meta.grade,
       students: res.students.length,
       subjects: res.subjects,
+<<<<<<< HEAD
       subjectLabels: res.subjectLabels || {},
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
       warnings: res.warnings,
       size: res.size,
     });
@@ -172,8 +190,11 @@ export async function buildDataset(fileList, opts = {}) {
       className: meta.className,
       grade: meta.grade,
       filePath: target.path,
+<<<<<<< HEAD
       subjectLabels: res.subjectLabels || {},
       subjectCodes: res.subjectCodes || {},
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     };
     for (const st of res.students) {
       students.push({ ...st, ...base });
@@ -225,7 +246,10 @@ export async function buildDataset(fileList, opts = {}) {
     students,
     skipped,
     subjects,
+<<<<<<< HEAD
     subjectLabels,
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     columns,
     years,
     terms,

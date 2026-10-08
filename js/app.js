@@ -17,7 +17,10 @@ import {
 } from './store.js';
 import { parseScore } from './parse.js';
 import { summarize, tierOf, fmt, pct } from './stats.js';
+<<<<<<< HEAD
 import { compareDatasets } from './import-diff.js';
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
 /* ------------------------------------------------------------ 全域狀態 --- */
 
@@ -36,8 +39,11 @@ const CLASS_COLORS = [
   '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#ec4899', '#06b6d4',
 ];
 
+<<<<<<< HEAD
 let resolveImportReview = null;
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 /* --------------------------------------------------------------- 工具 --- */
 
 const $ = (sel) => document.querySelector(sel);
@@ -144,6 +150,7 @@ function effectiveInfoColumns() {
   if (!ds || !ds.columns) return [];
   const disabled = new Set(state.settings.disabledSubjects || []);
   return ds.columns
+<<<<<<< HEAD
     .filter((c) => c.role === 'info'
       && !disabled.has(c.header)
       && (state.settings.showConductComponents || !/^(基本\s*操行|調整\s*操行)$/.test(c.header)))
@@ -163,6 +170,12 @@ function subjectDisplay(key, students = currentStudents()) {
   return label || key;
 }
 
+=======
+    .filter((c) => c.role === 'info' && !disabled.has(c.header))
+    .map((c) => c.header);
+}
+
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 /* -------------------------------------------------------------- 篩選 --- */
 
 function baseStudents() {
@@ -189,10 +202,13 @@ function currentStudents() {
   });
 }
 
+<<<<<<< HEAD
 function subjectsWithScores(subjects, students) {
   return subjects.filter((subject) => students.some((student) => getScore(student, subject) !== null));
 }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 function classesInScope() {
   const list = [...new Set(baseStudents().map((s) => s.className))];
   return list.sort((a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true }));
@@ -235,16 +251,24 @@ function sortedStudents(list, key, dir) {
 
 /* ==================================================== 成績總表的欄位定義 === */
 
+<<<<<<< HEAD
 function scoreColumns(students = currentStudents()) {
   const subjects = subjectsWithScores(effectiveSubjects(), students);
   const info = effectiveInfoColumns();
   const multiClass = new Set(students.map((s) => s.className)).size > 1;
+=======
+function scoreColumns() {
+  const subjects = effectiveSubjects();
+  const info = effectiveInfoColumns();
+  const multiClass = new Set(currentStudents().map((s) => s.className)).size > 1;
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   const cols = [
     { key: 'id', label: '學號', type: 'id', sticky: 1 },
     { key: 'name', label: '姓名', type: 'name', sticky: 2 },
   ];
   if (multiClass) cols.push({ key: 'className', label: '班級', type: 'class' });
+<<<<<<< HEAD
 
   for (const s of subjects) cols.push({ key: `sub:${s}`, label: subjectDisplay(s, students), type: 'num' });
   for (const h of info) cols.push({ key: `info:${h}`, label: h, type: 'info' });
@@ -255,6 +279,16 @@ function scoreColumns(students = currentStudents()) {
   cols.push({ key: '__avg', label: '平均', type: 'num', hint: '各科平均分，滿分 100' });
   // 每份 Excel 就是一個班；將班名次放到資料欄位後方，接近原始 Excel 順序。
   cols.push({ key: '__rank', label: '班名次', type: 'rank', hint: '該生在這個班內依總分排出的名次（同分同名次）' });
+=======
+  // 每份 Excel 就是一個班，所以檔案裡的「名次」是班內名次，標題要寫清楚
+  cols.push({ key: '__rank', label: '班名次', type: 'rank', hint: '該生在這個班內依總分排出的名次（同分同名次）' });
+
+  for (const s of subjects) cols.push({ key: `sub:${s}`, label: s, type: 'num' });
+  for (const h of info) cols.push({ key: `info:${h}`, label: h, type: 'info' });
+
+  cols.push({ key: '__total', label: '總分', type: 'num bold', hint: '各科加總。滿分＝科目數 × 100' });
+  cols.push({ key: '__avg', label: '平均', type: 'num', hint: '各科平均分，滿分 100' });
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   return cols;
 }
 
@@ -270,10 +304,16 @@ function renderScores() {
     return;
   }
 
+<<<<<<< HEAD
   const students = currentStudents();
   const cols = scoreColumns(students);
   const subjects = subjectsWithScores(effectiveSubjects(), students);
   const list = sortedStudents(students, state.sort.scores.key, state.sort.scores.dir);
+=======
+  const cols = scoreColumns();
+  const subjects = effectiveSubjects();
+  const list = sortedStudents(currentStudents(), state.sort.scores.key, state.sort.scores.dir);
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   const passLine = state.settings.passLine;
   const colorRow = state.settings.colorWholeRow;
   const tiers = state.settings.tiers;
@@ -355,6 +395,7 @@ function renderScores() {
 
   let foot = '<tfoot>';
   // 平均列
+<<<<<<< HEAD
   if (state.settings.showAverages) {
     foot += '<tr>';
     for (const c of cols) {
@@ -389,6 +430,38 @@ function renderScores() {
     foot += '</tr>';
   }
   foot += '</tfoot>';
+=======
+  foot += '<tr>';
+  for (const c of cols) {
+    const sticky = c.sticky === 1 ? ' sticky-col' : (c.sticky === 2 ? ' sticky-col sticky-col-2' : '');
+    const stickyStyle = c.sticky ? ` style="left:${c.sticky === 2 ? 96 : 0}px"` : '';
+    if (c.sticky === 1) { foot += `<td class="${sticky.trim()}"${stickyStyle}>平均</td>`; continue; }
+    if (c.sticky === 2) { foot += `<td class="${sticky.trim()}"${stickyStyle}></td>`; continue; }
+    const vals = valuesFor(c);
+    if (!vals || c.key === '__rank') { foot += '<td>—</td>'; continue; }
+    const sum = summarize(vals, passLine);
+    const tip = `最高 ${fmt(sum.max)}　最低 ${fmt(sum.min)}　標準差 ${fmt(sum.stdev)}　缺考 ${sum.absent} 人`;
+    foot += `<td class="num" title="${esc(tip)}">${fmt(sum.mean)}</td>`;
+  }
+  foot += '</tr>';
+  // 及格率列
+  foot += '<tr>';
+  for (const c of cols) {
+    const sticky = c.sticky === 1 ? ' sticky-col' : (c.sticky === 2 ? ' sticky-col sticky-col-2' : '');
+    const stickyStyle = c.sticky ? ` style="left:${c.sticky === 2 ? 96 : 0}px"` : '';
+    if (c.sticky === 1) { foot += `<td class="${sticky.trim()}"${stickyStyle}>及格率</td>`; continue; }
+    if (c.sticky === 2) { foot += `<td class="${sticky.trim()}"${stickyStyle}></td>`; continue; }
+    const vals = rateValuesFor(c);
+    if (!vals || c.key === '__rank') { foot += '<td>—</td>'; continue; }
+    const sum = summarize(vals, passLine);
+    const color = sum.passRate === null ? '' : sum.passRate < 0.6 ? 'color:#d32f2f' : sum.passRate < 0.8 ? 'color:#e07b00' : 'color:#2e7d32';
+    const tip = c.key === '__total'
+      ? `總分是各科加總（滿分 ${subjects.length * 100}），不能直接和 ${passLine} 比。這裡的及格率是以每位學生的「平均分」是否 ≥ ${passLine} 來判斷。`
+      : `分數 ≥ ${passLine} 的人數比例`;
+    foot += `<td class="num" style="${color}" title="${esc(tip)}">${pct(sum.passRate)}</td>`;
+  }
+  foot += '</tr></tfoot>';
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   table.innerHTML = thead + '<tbody>' + bodyRows.join('') + '</tbody>' + foot;
 
@@ -402,8 +475,13 @@ function renderScores() {
     chip(list.length, '位學生'),
     chip(new Set(list.map((s) => s.className)).size, '個班級'),
     chip(fmt(overallAvg.mean), '平均分'),
+<<<<<<< HEAD
     ...(state.settings.showPassRates ? [chip(pct(overallAvg.passRate), `平均分及格率（≥${passLine}）`)] : []),
     ...(state.settings.showTotals ? [chip(fmt(overallTotal.mean), '總分平均')] : []),
+=======
+    chip(pct(overallAvg.passRate), `平均分及格率（≥${passLine}）`),
+    chip(fmt(overallTotal.mean), '總分平均'),
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     chip(subjects.length, '個科目'),
   ].join('');
 
@@ -422,13 +500,21 @@ function chip(value, label) {
 
 function renderCompare() {
   const subjectSel = $('#selSubject');
+<<<<<<< HEAD
   const inScope = state.compare.scope === 'grade' ? baseStudents() : currentStudents();
   const subjects = subjectsWithScores(effectiveSubjects(), inScope);
+=======
+  const subjects = effectiveSubjects();
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   // 科目下拉選單（保留目前選擇）
   const keep = state.compare.subject;
   subjectSel.innerHTML = subjects.length
+<<<<<<< HEAD
     ? subjects.map((s) => `<option value="${esc(s)}">${esc(subjectDisplay(s, baseStudents()))}</option>`).join('')
+=======
+    ? subjects.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     : '<option value="">（沒有可比較的科目）</option>';
   if (keep && subjects.includes(keep)) subjectSel.value = keep;
   const subject = subjectSel.value || subjects[0] || '';
@@ -449,7 +535,11 @@ function renderCompare() {
     return;
   }
 
+<<<<<<< HEAD
   const displaySubject = subjectDisplay(subject, inScope);
+=======
+  const inScope = state.compare.scope === 'grade' ? baseStudents() : currentStudents();
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   const students = inScope.filter((s) => getScore(s, subject) !== null);
   const passLine = state.settings.passLine;
   const tiers = state.settings.tiers;
@@ -478,7 +568,11 @@ function renderCompare() {
         <dt>中位數</dt><dd>${fmt(st.median)}</dd>
         <dt>最高 / 最低</dt><dd>${fmt(st.max)} / ${fmt(st.min)}</dd>
         <dt>標準差</dt><dd>${fmt(st.stdev)}</dd>
+<<<<<<< HEAD
         ${state.settings.showPassRates ? `<dt>及格率</dt><dd>${pct(st.passRate)}</dd>` : ''}
+=======
+        <dt>及格率</dt><dd>${pct(st.passRate)}</dd>
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
         <dt>缺考</dt><dd>${st.absent} 人</dd>
       </dl>
     </div>`;
@@ -494,7 +588,11 @@ function renderCompare() {
   const maxVal = Math.max(100, ...rows.map((r) => r.value || 0));
   const passPct = (passLine / maxVal) * 100;
   chartBox.className = 'bars';
+<<<<<<< HEAD
   chartBox.innerHTML = `<h2>各班「${esc(displaySubject)}」平均比較</h2>`
+=======
+  chartBox.innerHTML = `<h2>各班「${esc(subject)}」平均比較</h2>`
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     + [overallRow, ...rows].map((r) => {
       const w = r.value === null ? 0 : (r.value / maxVal) * 100;
       const t = tierOf(r.value, tiers);
@@ -543,6 +641,7 @@ function renderCompare() {
     + '<th class="no-sort">學號</th>'
     + '<th class="no-sort">姓名</th>'
     + '<th class="no-sort">班級</th>'
+<<<<<<< HEAD
     + `<th class="no-sort">${esc(displaySubject)}</th>`
     + '<th class="no-sort">與全級平均差</th>'
     + '<th class="no-sort">班內排名</th>'
@@ -551,6 +650,16 @@ function renderCompare() {
 
   if (display.length === 0) {
     html += `<tr><td colspan="${state.settings.showTotals ? 8 : 7}" style="padding:24px;color:var(--text-2)">目前範圍內沒有學生在「${esc(displaySubject)}」有分數。</td></tr>`;
+=======
+    + `<th class="no-sort">${esc(subject)}</th>`
+    + '<th class="no-sort">與全級平均差</th>'
+    + '<th class="no-sort">班內排名</th>'
+    + '<th class="no-sort">該生總分</th>'
+    + '</tr></thead><tbody>';
+
+  if (display.length === 0) {
+    html += `<tr><td colspan="8" style="padding:24px;color:var(--text-2)">目前範圍內沒有學生在「${esc(subject)}」有分數。</td></tr>`;
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   }
 
   display.forEach((s, i) => {
@@ -569,13 +678,18 @@ function renderCompare() {
       <td class="num cell-color" style="${style}">${fmt(v)}</td>
       <td class="num" style="${diffColor}">${diffTxt}</td>
       <td class="num">${rankInClassForSubject.get(s) ?? '—'}</td>
+<<<<<<< HEAD
       ${state.settings.showTotals ? `<td class="num">${fmt(totalOf(s))}</td>` : ''}
+=======
+      <td class="num">${fmt(totalOf(s))}</td>
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     </tr>`;
   });
 
   // 統計頁尾（針對該科）
   const stats = summarize(students.map((s) => getScore(s, subject)), passLine);
   html += '</tbody><tfoot><tr>'
+<<<<<<< HEAD
     + `<td colspan="4" style="text-align:left">全年級「${esc(displaySubject)}」統計（${students.length} 人）</td>`
     + `<td class="num">平均 ${fmt(stats.mean)}</td>`
     + `<td class="num">中位 ${fmt(stats.median)}</td>`
@@ -588,13 +702,29 @@ function renderCompare() {
   table.innerHTML = html;
   countEl.textContent = `${displaySubject}　共 ${display.length} 人　全年級平均 ${fmt(overall.mean)}`
     + (state.settings.showPassRates ? `　及格率 ${pct(overall.passRate)}` : '');
+=======
+    + `<td colspan="4" style="text-align:left">全年級「${esc(subject)}」統計（${students.length} 人）</td>`
+    + `<td class="num">平均 ${fmt(stats.mean)}</td>`
+    + `<td class="num">中位 ${fmt(stats.median)}</td>`
+    + `<td class="num">及格率 ${pct(stats.passRate)}</td>`
+    + `<td class="num">標準差 ${fmt(stats.stdev)}</td>`
+    + '</tr></tfoot>';
+
+  table.innerHTML = html;
+  countEl.textContent = `${subject}　共 ${display.length} 人　全年級平均 ${fmt(overall.mean)}　及格率 ${pct(overall.passRate)}`;
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   /* ---- 班級 × 科目 平均矩陣 ---- */
   // 注意：subjects 已在函式開頭取得，這裡直接沿用（不可重複宣告，否則整個模組會語法錯誤）
   let m = '<thead><tr><th class="row-head no-sort">班級</th>';
+<<<<<<< HEAD
   for (const sub of subjects) m += `<th class="no-sort">${esc(subjectDisplay(sub, inScope))}</th>`;
   if (state.settings.showTotals) m += '<th class="no-sort">總分平均</th>';
   m += '</tr></thead><tbody>';
+=======
+  for (const sub of subjects) m += `<th class="no-sort">${esc(sub)}</th>`;
+  m += '<th class="no-sort">總分平均</th></tr></thead><tbody>';
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   for (const cn of classNames) {
     const list = byClass.get(cn);
@@ -603,6 +733,7 @@ function renderCompare() {
       const st = summarize(list.map((s) => getScore(s, sub)), passLine);
       const t = tierOf(st.mean, tiers);
       const style = t ? `background:${t.bg};color:${t.fg}` : '';
+<<<<<<< HEAD
       const title = `平均 ${fmt(st.mean)}${state.settings.showPassRates ? `　及格率 ${pct(st.passRate)}` : ''}`;
       m += `<td class="matrix-cell" style="${style}" title="${esc(title)}">${fmt(st.mean)}</td>`;
     }
@@ -611,6 +742,12 @@ function renderCompare() {
       m += `<td class="matrix-cell" title="總分平均">${fmt(st.mean)}</td>`;
     }
     m += '</tr>';
+=======
+      m += `<td class="matrix-cell" style="${style}" title="平均 ${fmt(st.mean)}　及格率 ${pct(st.passRate)}">${fmt(st.mean)}</td>`;
+    }
+    const st = summarize(list.map(totalOf), passLine);
+    m += `<td class="matrix-cell" title="總分平均">${fmt(st.mean)}</td></tr>`;
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   }
   // 全年級平均列
   m += '<tr><td class="row-head" style="background:#e8eaf3">全年級</td>';
@@ -620,10 +757,15 @@ function renderCompare() {
     const style = t ? `background:${t.bg};color:${t.fg};font-weight:800` : 'font-weight:800';
     m += `<td class="matrix-cell" style="${style}">${fmt(st.mean)}</td>`;
   }
+<<<<<<< HEAD
   if (state.settings.showTotals) {
     m += `<td class="matrix-cell" style="font-weight:800">${fmt(summarize(inScope.map(totalOf), passLine).mean)}</td>`;
   }
   m += '</tr></tbody>';
+=======
+  m += `<td class="matrix-cell" style="font-weight:800">${fmt(summarize(inScope.map(totalOf), passLine).mean)}</td></tr>`;
+  m += '</tbody>';
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   matrixBox.innerHTML = m;
 }
@@ -792,7 +934,11 @@ function renderSubjectManager() {
     const isOn = forced.has(c.header) || (c.role === 'subject' && !disabled.has(c.header));
     return `<div class="subject-item">
       <input type="checkbox" data-header="${esc(c.header)}" ${isOn ? 'checked' : ''} ${isFixed ? 'disabled' : ''}>
+<<<<<<< HEAD
       <span class="sname">${esc(subjectDisplay(c.header, baseStudents()))}</span>
+=======
+      <span class="sname">${esc(c.header)}</span>
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
       <span class="tag ${esc(c.role)}">${esc(roleLabel[c.role] || c.role)}</span>
     </div>`;
   }).join('');
@@ -858,9 +1004,13 @@ function renderFilters() {
   termSel.value = state.filters.term;
 
   // 年級
+<<<<<<< HEAD
   const grades = [...new Set(ds.students
     .filter((s) => s.year === state.filters.year && (!state.filters.term || s.term === state.filters.term))
     .map((s) => s.grade))];
+=======
+  const grades = [...new Set(baseStudents().map((s) => s.grade))];
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   gradeSel.innerHTML = '<option value="">全部年級</option>'
     + grades.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
   if (state.filters.grade && !grades.includes(state.filters.grade)) state.filters.grade = '';
@@ -974,10 +1124,13 @@ function setLoading(on, text, sub) {
 }
 
 async function loadFromFiles(files, sourceName) {
+<<<<<<< HEAD
   if (resolveImportReview) {
     showToast('請先完成目前的資料變更確認，再開始另一個匯入。');
     return;
   }
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   if (state.abort) state.abort.abort();
   state.abort = new AbortController();
 
@@ -993,6 +1146,7 @@ async function loadFromFiles(files, sourceName) {
         $('#loadingSub').textContent = `${done} / ${total}　${item && item.path ? item.path.split('/').pop() : ''}`;
       },
     });
+<<<<<<< HEAD
     if (state.dataset) {
       setLoading(false);
       const confirmed = await reviewDatasetImport(state.dataset, dataset);
@@ -1001,6 +1155,8 @@ async function loadFromFiles(files, sourceName) {
         return;
       }
     }
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     applyDataset(dataset);
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     showToast(`載入完成：${dataset.summary.studentCount} 位學生、${dataset.summary.okFileCount} 個檔案（${secs} 秒）`);
@@ -1017,6 +1173,7 @@ async function loadFromFiles(files, sourceName) {
   }
 }
 
+<<<<<<< HEAD
 function renderImportReport(previous, incoming) {
   const diff = compareDatasets(previous, incoming);
   const changedStudents = diff.changed.reduce((count, file) => count + file.changed.length, 0);
@@ -1118,6 +1275,9 @@ function normalizeConductLabels(dataset) {
 
 function applyDataset(dataset) {
   normalizeConductLabels(dataset);
+=======
+function applyDataset(dataset) {
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   state.dataset = dataset;
   // 預設篩選：最新學年 + 該學年第一個學段 + 全部年級 + 全部班級
   state.filters.year = dataset.years[dataset.years.length - 1] || '';
@@ -1238,6 +1398,7 @@ function exportScoresCsv() {
   showToast(`已匯出 ${list.length} 筆資料`);
 }
 
+<<<<<<< HEAD
 function exportHeading(classLabel) {
   const parts = [
     state.filters.year || '全部學年',
@@ -1335,16 +1496,22 @@ function printCompare() {
   window.print();
 }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 function exportCompareCsv() {
   if (!state.dataset) return;
   const subject = state.compare.subject;
   if (!subject) { showToast('請先選擇科目'); return; }
   const inScope = state.compare.scope === 'grade' ? baseStudents() : currentStudents();
+<<<<<<< HEAD
   const displaySubject = subjectDisplay(subject, inScope);
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   const students = inScope.filter((s) => getScore(s, subject) !== null);
   const sorted = sortedStudents(students, `sub:${subject}`, -1);
   const overall = summarize(inScope.map((s) => getScore(s, subject)), state.settings.passLine);
 
+<<<<<<< HEAD
   const header = ['全級排名', '學號', '姓名', '班級', displaySubject, '與全級平均差'];
   if (state.settings.showTotals) header.push('該生總分');
   const rows = sorted.map((s, i) => {
@@ -1358,6 +1525,18 @@ function exportCompareCsv() {
   const csv = [header, ...rows].map((r) => r.map(csvEscape).join(',')).join('\r\n');
   downloadText(`單科排名_${displaySubject}_${state.filters.year || ''}${state.filters.term || ''}.csv`, csv);
   showToast(`已匯出「${displaySubject}」${sorted.length} 筆`);
+=======
+  const header = ['全級排名', '學號', '姓名', '班級', subject, '與全級平均差', '該生總分'];
+  const rows = sorted.map((s, i) => {
+    const v = getScore(s, subject);
+    const diff = overall.mean === null ? '' : Math.round((v - overall.mean) * 10) / 10;
+    return [i + 1, s.id, s.name, s.className, v, diff, totalOf(s) ?? ''];
+  });
+
+  const csv = [header, ...rows].map((r) => r.map(csvEscape).join(',')).join('\r\n');
+  downloadText(`單科排名_${subject}_${state.filters.year || ''}${state.filters.term || ''}.csv`, csv);
+  showToast(`已匯出「${subject}」${sorted.length} 筆`);
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 }
 
 /* ======================================================== 事件綁定 === */
@@ -1505,6 +1684,7 @@ function bindEvents() {
   });
 
   $('#btnExportCsv').addEventListener('click', exportScoresCsv);
+<<<<<<< HEAD
   $('#btnExportPdfScores').addEventListener('click', () => printScores());
   $('#btnExportPdfAllClasses').addEventListener('click', () => printScores(true));
   $('#btnExportPdfCompare').addEventListener('click', printCompare);
@@ -1526,6 +1706,9 @@ function bindEvents() {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && resolveImportReview) settleImportReview(false);
   });
+=======
+  $('#btnPrint').addEventListener('click', () => window.print());
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
   /* --- 比較頁 --- */
   $('#selSubject').addEventListener('change', (e) => {
@@ -1634,9 +1817,12 @@ function bindEvents() {
     if (!confirm('確定要把所有設定（門檻、及格線、科目）回復預設嗎？')) return;
     resetSettings();
     state.settings = structuredClone(DEFAULT_SETTINGS);
+<<<<<<< HEAD
     document.querySelectorAll('[data-display-setting]').forEach((input) => {
       input.checked = !!state.settings[input.dataset.displaySetting];
     });
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     renderSettings();
     refresh();
     showToast('已回復預設設定');
@@ -1656,9 +1842,12 @@ async function init() {
   // 把設定值套到 UI
   $('#chkRecompute').checked = !!state.settings.recomputeTotals;
   $('#chkColorRow').checked = !!state.settings.colorWholeRow;
+<<<<<<< HEAD
   document.querySelectorAll('[data-display-setting]').forEach((input) => {
     input.checked = !!state.settings[input.dataset.displaySetting];
   });
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   $('#inpPassLine').value = state.settings.passLine;
 
   // 網址參數：?demo=1 直接載入示範資料、?view=compare 直接切到指定分頁
@@ -1671,7 +1860,10 @@ async function init() {
     // 嘗試還原上次載入的資料
     const saved = await loadDataset();
     if (saved && saved.students && saved.students.length) {
+<<<<<<< HEAD
       normalizeConductLabels(saved);
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
       state.dataset = saved;
       state.filters.year = saved.years[saved.years.length - 1] || '';
       const terms = [...new Set(saved.students.filter((s) => s.year === state.filters.year).map((s) => s.term))];

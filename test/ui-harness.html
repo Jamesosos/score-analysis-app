@@ -65,11 +65,14 @@ async function loadApp(url) {
   await waitFor(() => doc() && doc().querySelector('#dataStatus'), 'App DOM 就緒');
 }
 
+<<<<<<< HEAD
 async function approvePendingImport() {
   await waitFor(() => doc().querySelector('#importReview')?.hidden === false, '匯入變更比較');
   doc().querySelector('#btnConfirmImport').click();
 }
 
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 const rows = () => [...doc().querySelectorAll('#scoresTable tbody tr')];
 const colIndex = (label) => {
   const th = [...doc().querySelectorAll('#scoresTable thead th')].find((t) => t.textContent.includes(label));
@@ -124,6 +127,7 @@ async function section(title, fn) {
     check('學年下拉有 3 個學年', yrs.length === 3, yrs.join(','));
 
     const chips = [...doc().querySelectorAll('#scoresSummary .stat-chip')].map((c) => c.textContent).join(' | ');
+<<<<<<< HEAD
     check('總分與及格率預設隱藏',
       !/總分|及格率/.test(chips)
         && ![...doc().querySelectorAll('#scoresTable thead th')].some((t) => t.textContent.includes('總分'))
@@ -185,6 +189,15 @@ async function section(title, fn) {
     win().print = nativePrint;
     doc().querySelector('#btnClearClasses').click();
     await sleep(100);
+=======
+    check('摘要改用「平均分及格率」而非總分及格率',
+      /平均分及格率/.test(chips) && !/總分及格率/.test(chips), chips.slice(0, 88));
+    const rate = chips.match(/(\d+(?:\.\d+)?)%\s*平均分及格率/);
+    check('平均分及格率是合理數值', !!rate && Number(rate[1]) > 30 && Number(rate[1]) < 100,
+      rate ? `${rate[1]}%` : '找不到');
+    check('名次欄已標示為「班名次」',
+      [...doc().querySelectorAll('#scoresTable thead th')].some((t) => t.textContent.includes('班名次')));
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     check('沒有錯誤橫幅', !doc().getElementById('fatalError'));
     check('多班時顯示「班級」欄', colIndex('班級') >= 0);
   });
@@ -312,8 +325,11 @@ async function section(title, fn) {
     check('各班平均長條圖已產生', bars >= 7, `${bars} 條（含全年級）`);
     check('長條圖有及格線虛線', passLines >= 7, `${passLines} 條`);
     check('班級×科目矩陣已產生', mRows >= 7 && mCols >= 10, `${mRows} 列 × ${mCols} 欄`);
+<<<<<<< HEAD
     check('矩陣各列欄數與表頭一致',
       [...doc().querySelectorAll('#matrixTable tbody tr')].every((tr) => tr.children.length === mCols));
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
     const cmpScores = [...doc().querySelectorAll('#compareTable tbody tr')].slice(0, 8)
       .map((tr) => tr.children[4].textContent.trim());
@@ -321,6 +337,7 @@ async function section(title, fn) {
       numeric(cmpScores).every((v, i, a) => i === 0 || a[i - 1] >= v), cmpScores.join(' , '));
 
     const statsText = doc().querySelector('#compareStats').textContent;
+<<<<<<< HEAD
     check('及格率預設不顯示在比較卡片',
       /平均/.test(statsText) && /標準差/.test(statsText) && !/及格率/.test(statsText));
 
@@ -371,6 +388,10 @@ async function section(title, fn) {
       /學生成績/.test(doc().querySelector('#pdfExport .pdf-page-heading')?.textContent || '')
         && /匯出日期/.test(doc().querySelector('#pdfExport .pdf-page-heading')?.textContent || ''));
     win().dispatchEvent(new Event('afterprint'));
+=======
+    check('統計卡片含平均、標準差、及格率',
+      /平均/.test(statsText) && /標準差/.test(statsText) && /及格率/.test(statsText));
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
     // 範圍切回「只顯示已勾選班級」應該仍是全部（因為沒勾＝全部）
     const scope2 = doc().querySelector('#selScope');
@@ -531,7 +552,10 @@ async function section(title, fn) {
     const input = doc().querySelector('#folderInput');
     input.files = dt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
+<<<<<<< HEAD
     await approvePendingImport();
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
     await waitFor(() => {
       const t = doc().querySelector('#dataStatus').textContent;
@@ -628,13 +652,17 @@ async function section(title, fn) {
     }
     input.files = dupDt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
+<<<<<<< HEAD
     await approvePendingImport();
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
     await waitFor(() => doc().querySelector('#tabWarnBadge').hidden === false, '問題徽章出現', 25000);
 
     const badge = doc().querySelector('#tabWarnBadge');
     check('重複檔案產生警告，且徽章在別的分頁也即時更新',
       !badge.hidden && badge.textContent.trim() === '1',
       `徽章顯示「${badge.textContent.trim()}」`);
+<<<<<<< HEAD
 
     const currentPaths = [
       '第一段/初一/初一仁.xlsx', '第一段/初一/初一禮.xlsx', '第一段/初一/初一義.xlsx',
@@ -803,6 +831,8 @@ async function section(title, fn) {
     doc().querySelector('#btnConfirmImport').click();
     await waitFor(() => doc().querySelector('#dataStatus').textContent.includes('2 位學生'),
       '確認變更資料');
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   });
 
   /* ---------------------------------------------- 總結 --- */

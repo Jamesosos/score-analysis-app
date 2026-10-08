@@ -9,7 +9,11 @@
  * 這樣可以確保：換了 Excel 內容，重新載入就一定是新的，不會被舊快取卡住。
  */
 
+<<<<<<< HEAD
 const CACHE = 'grade-app-shell-v3';
+=======
+const CACHE = 'grade-app-shell-v1';
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
 
 const SHELL = [
   './',
@@ -19,7 +23,10 @@ const SHELL = [
   './js/xlsx.js',
   './js/parse.js',
   './js/loader.js',
+<<<<<<< HEAD
   './js/import-diff.js',
+=======
+>>>>>>> e1b79721076a5dbb3de0fe79d448fb57b1aa9069
   './js/store.js',
   './js/stats.js',
   './manifest.webmanifest',
